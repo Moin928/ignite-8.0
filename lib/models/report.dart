@@ -1,3 +1,5 @@
+import 'package:civic_app/models/issue.dart';
+
 class Report {
   final String id;
   final String? issueId;
@@ -8,6 +10,7 @@ class Report {
   final bool isSpam;
   final double? aiConfidence;
   final DateTime? createdAt;
+  final Issue? issue; // Linked issue with status, title, severity
 
   Report({
     required this.id,
@@ -19,6 +22,7 @@ class Report {
     required this.isSpam,
     this.aiConfidence,
     this.createdAt,
+    this.issue,
   });
 
   factory Report.fromJson(Map<String, dynamic> json) {
@@ -26,12 +30,15 @@ class Report {
       id: json['id'],
       issueId: json['issue_id'],
       citizenId: json['citizen_id'],
-      imageUrl: json['image_url'],
+      imageUrl: json['image_url'] ?? '',
       description: json['description'],
       location: json['location'],
       isSpam: json['is_spam'] ?? false,
       aiConfidence: (json['ai_confidence'] as num?)?.toDouble(),
       createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : null,
+      issue: json['issues'] != null
+          ? Issue.fromJson(json['issues'] as Map<String, dynamic>)
+          : null,
     );
   }
 
@@ -46,6 +53,7 @@ class Report {
       'is_spam': isSpam,
       'ai_confidence': aiConfidence,
       'created_at': createdAt?.toIso8601String(),
+      'issues': issue?.toJson(),
     };
   }
 }

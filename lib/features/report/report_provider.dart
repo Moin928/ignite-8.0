@@ -15,7 +15,9 @@ class ReportService {
   ReportService(this._supabase);
 
   Future<void> submitReport({
+    required String title,
     required String category,
+    required String severity,
     required String description,
     required File imageFile,
     required double lat,
@@ -44,11 +46,12 @@ class ReportService {
     // 2. PostGIS POINT format: POINT(lng lat)
     final locationPoint = 'POINT($lng $lat)';
 
-    // 3. Insert issue
+    // 3. Insert issue with severity and title
     final issueRes = await _supabase.from('issues').insert({
-      'title': '$category Issue',
-      'description': description,
+      'title': title.trim().isNotEmpty ? title.trim() : '$category Issue',
+      'description': description.trim(),
       'category': category,
+      'severity': severity.toLowerCase(),
       'location': locationPoint,
       'status': 'reported',
       'report_count': 1,
@@ -61,7 +64,7 @@ class ReportService {
       'issue_id': issueId,
       'citizen_id': user.id,
       'image_url': imageUrl,
-      'description': description,
+      'description': description.trim(),
       'location': locationPoint,
     });
   }

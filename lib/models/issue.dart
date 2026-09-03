@@ -4,8 +4,9 @@ class Issue {
   final String? description;
   final String category;
   final String status;
+  final String severity;
   final double priorityScore;
-  final dynamic location; // Handle appropriately based on Supabase PostGIS geometry format
+  final dynamic location;
   final String? assignedWorkerId;
   final int reportCount;
   final DateTime? createdAt;
@@ -17,6 +18,7 @@ class Issue {
     this.description,
     required this.category,
     required this.status,
+    required this.severity,
     required this.priorityScore,
     required this.location,
     this.assignedWorkerId,
@@ -25,14 +27,23 @@ class Issue {
     this.updatedAt,
   });
 
+  double? get lat => location is Map ? (location as Map)['lat'] as double? : null;
+  double? get lng => location is Map ? (location as Map)['lng'] as double? : null;
+
   factory Issue.fromJson(Map<String, dynamic> json) {
     dynamic parsedLocation;
     if (json['location'] != null) {
       final locStr = json['location'].toString();
       if (locStr.startsWith('POINT(')) {
-        final coords = locStr.replaceAll('POINT(', '').replaceAll(')', '').split(' ');
+        final coords = locStr
+            .replaceAll('POINT(', '')
+            .replaceAll(')', '')
+            .split(' ');
         if (coords.length == 2) {
-          parsedLocation = {'lng': double.parse(coords[0]), 'lat': double.parse(coords[1])};
+          parsedLocation = {
+            'lng': double.parse(coords[0]),
+            'lat': double.parse(coords[1]),
+          };
         }
       } else {
         parsedLocation = json['location'];
@@ -45,12 +56,17 @@ class Issue {
       description: json['description'],
       category: json['category'] ?? 'other',
       status: json['status'] ?? 'reported',
+      severity: json['severity'] ?? 'low',
       priorityScore: (json['priority_score'] as num?)?.toDouble() ?? 0.0,
       location: parsedLocation,
       assignedWorkerId: json['assigned_worker_id'],
       reportCount: json['report_count'] ?? 1,
-      createdAt: json['created_at'] != null ? DateTime.parse(json['created_at']) : null,
-      updatedAt: json['updated_at'] != null ? DateTime.parse(json['updated_at']) : null,
+      createdAt: json['created_at'] != null
+          ? DateTime.parse(json['created_at'])
+          : null,
+      updatedAt: json['updated_at'] != null
+          ? DateTime.parse(json['updated_at'])
+          : null,
     );
   }
 
@@ -61,6 +77,7 @@ class Issue {
       'description': description,
       'category': category,
       'status': status,
+      'severity': severity,
       'priority_score': priorityScore,
       'location': location,
       'assigned_worker_id': assignedWorkerId,
