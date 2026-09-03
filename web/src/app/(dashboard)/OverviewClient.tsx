@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -74,15 +74,25 @@ const CAT_LABEL: Record<string, string> = {
 export default function OverviewClient({ initialIssues, stats }: Props) {
   const [issues] = useState<DocketIssue[]>(initialIssues);
   const [selectedId, setSelectedId] = useState<string>(
-    initialIssues[0]?.id || ""
+    initialIssues[0]?.id || "",
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [priorityFilter, setPriorityFilter] = useState<"all" | "critical" | "pending">("all");
-  const [imageFitMode, setImageFitMode] = useState<"cover" | "contain">("cover");
+  const [priorityFilter, setPriorityFilter] = useState<
+    "all" | "critical" | "pending"
+  >("all");
+  const [imageFitMode, setImageFitMode] = useState<"cover" | "contain">(
+    "cover",
+  );
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [dispatchedSet, setDispatchedSet] = useState<Record<string, boolean>>({});
   const router = useRouter();
+
+  // Auto-refresh the feed every 1 minute in the background
+  useEffect(() => {
+    const interval = setInterval(() => {
+      router.refresh();
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [router]);
 
   // Filter issues
   const filteredIssues = issues.filter((item) => {
@@ -99,28 +109,11 @@ export default function OverviewClient({ initialIssues, stats }: Props) {
   });
 
   const selectedIssue =
-    issues.find((i) => i.id === selectedId) || issues[0] || null;
-
-  const isDispatched = selectedIssue ? !!dispatchedSet[selectedIssue.id] : false;
-
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    try {
-      await fetch("/api/ai/process-pending", { method: "POST" });
-    } catch {}
-    router.refresh();
-    setTimeout(() => setIsRefreshing(false), 600);
-  };
-
-  const handleDispatch = () => {
-    if (selectedIssue) {
-      setDispatchedSet((prev) => ({ ...prev, [selectedIssue.id]: true }));
-    }
-  };
+    filteredIssues.find((i) => i.id === selectedId) || filteredIssues[0];
 
   return (
     <div className="p-6 max-w-7xl mx-auto space-y-5 font-sans bg-slate-50/50">
-      {/* ── 1. Top Header: Title & Only Refresh Feed Button ── */}
+      {/* ── 1. Top Header: Title & Auto-sync Live Status ── */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-black text-slate-900 tracking-tight">
@@ -129,23 +122,6 @@ export default function OverviewClient({ initialIssues, stats }: Props) {
           <p className="text-xs text-slate-500 font-medium mt-0.5">
             Public works resolution console · Real-time civic queue
           </p>
-        </div>
-
-        {/* Top Right: Refresh Feed Button */}
-        <div className="flex items-center gap-2.5">
-          <button
-            type="button"
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-sm border border-slate-300 font-semibold text-xs shadow-sm transition cursor-pointer"
-            title="Refresh feed and run AI deduplication"
-          >
-            <RefreshCw
-              size={13}
-              className={isRefreshing ? "animate-spin text-amber-600" : "text-slate-500"}
-            />
-            <span>Refresh Feed</span>
-          </button>
         </div>
       </div>
 
@@ -166,7 +142,9 @@ export default function OverviewClient({ initialIssues, stats }: Props) {
         {/* Critical (SLA < 4h) */}
         <div className="bg-white border border-slate-200 rounded-sm p-4 shadow-sm border-t-2 border-t-amber-500 relative">
           <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-semibold">Critical (SLA &lt; 4h)</span>
+            <span className="text-xs font-semibold">
+              Critical (SLA &lt; 4h)
+            </span>
             <span className="text-amber-500 font-bold text-sm">✴</span>
           </div>
           <div className="flex items-baseline gap-2 my-1">
@@ -177,7 +155,9 @@ export default function OverviewClient({ initialIssues, stats }: Props) {
               High Priority
             </span>
           </div>
-          <div className="text-[11px] text-slate-400">Requires immediate dispatch</div>
+          <div className="text-[11px] text-slate-400">
+            Requires immediate dispatch
+          </div>
         </div>
 
         {/* Dispatched Crews */}
@@ -346,7 +326,9 @@ export default function OverviewClient({ initialIssues, stats }: Props) {
                         : "bg-slate-100 text-slate-700"
                     }`}
                   >
-                    {selectedIssue.priority_score >= 80 ? "CRITICAL HAZARD" : "ROUTINE DEFECT"}
+                    {selectedIssue.priority_score >= 80
+                      ? "CRITICAL HAZARD"
+                      : "ROUTINE DEFECT"}
                   </span>
                 </div>
                 <div className="text-xs text-slate-500 font-medium">
@@ -362,7 +344,9 @@ export default function OverviewClient({ initialIssues, stats }: Props) {
                     src={selectedIssue.image_url}
                     alt={selectedIssue.title}
                     className={`w-full h-full transition-all duration-300 ${
-                      imageFitMode === "contain" ? "object-contain" : "object-cover"
+                      imageFitMode === "contain"
+                        ? "object-contain"
+                        : "object-cover"
                     }`}
                     onError={(e) => {
                       (e.target as HTMLImageElement).src =
@@ -376,7 +360,9 @@ export default function OverviewClient({ initialIssues, stats }: Props) {
                   <button
                     type="button"
                     onClick={() =>
-                      setImageFitMode((prev) => (prev === "cover" ? "contain" : "cover"))
+                      setImageFitMode((prev) =>
+                        prev === "cover" ? "contain" : "cover",
+                      )
                     }
                     className="flex items-center gap-1 px-2.5 py-1 bg-slate-900/85 hover:bg-slate-900 text-white rounded-full text-[11px] font-semibold backdrop-blur-sm border border-white/20 shadow transition cursor-pointer"
                     title="Fit to size (show full photo uncropped)"
@@ -408,7 +394,9 @@ export default function OverviewClient({ initialIssues, stats }: Props) {
                 <div className="px-3.5 py-2 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-600 font-medium">
                   <div className="flex items-center gap-1.5 truncate max-w-[280px]">
                     <MapPin size={12} className="text-amber-600 shrink-0" />
-                    <span className="truncate">{selectedIssue.location_address}</span>
+                    <span className="truncate">
+                      {selectedIssue.location_address}
+                    </span>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <a
@@ -442,19 +430,26 @@ export default function OverviewClient({ initialIssues, stats }: Props) {
               {/* Detail Grid / Municipal Case Metadata */}
               <div className="bg-slate-50/70 border border-slate-200 rounded-sm p-3.5 space-y-2 text-xs">
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-500 font-medium">Duplicate Clustering:</span>
+                  <span className="text-slate-500 font-medium">
+                    Duplicate Clustering:
+                  </span>
                   <span className="font-bold text-slate-900">
-                    {selectedIssue.report_count} citizen report{selectedIssue.report_count !== 1 ? "s" : ""} consolidated
+                    {selectedIssue.report_count} citizen report
+                    {selectedIssue.report_count !== 1 ? "s" : ""} consolidated
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-500 font-medium">Designated Lead:</span>
+                  <span className="text-slate-500 font-medium">
+                    Designated Lead:
+                  </span>
                   <span className="font-semibold text-slate-800">
                     {selectedIssue.lead_department}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-slate-500 font-medium">Case Officer:</span>
+                  <span className="text-slate-500 font-medium">
+                    Case Officer:
+                  </span>
                   <span className="font-semibold text-slate-800">
                     {selectedIssue.case_officer}
                   </span>
@@ -462,36 +457,14 @@ export default function OverviewClient({ initialIssues, stats }: Props) {
               </div>
 
               {/* Action Buttons */}
-              <div className="space-y-2 pt-1">
-                {/* Dispatch Button */}
-                <button
-                  type="button"
-                  onClick={handleDispatch}
-                  disabled={isDispatched}
-                  className={`w-full py-2.5 rounded-sm font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition ${
-                    isDispatched
-                      ? "bg-emerald-600 text-white cursor-default"
-                      : "bg-amber-500 hover:bg-amber-600 text-slate-900 cursor-pointer"
-                  }`}
-                >
-                  {isDispatched ? (
-                    <>
-                      <CheckCircle2 size={14} /> Repair Team Dispatched &amp; Notified
-                    </>
-                  ) : (
-                    <>
-                      <Send size={13} /> Dispatch Repair Team
-                    </>
-                  )}
-                </button>
-
+              <div className="pt-2">
                 {/* Review Full Issue Link Button */}
                 <Link
                   href={`/issues/${selectedIssue.id}`}
-                  className="w-full py-2.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 rounded-sm font-semibold text-xs flex items-center justify-center gap-1.5 transition shadow-sm"
+                  className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs rounded-sm flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer"
                 >
                   <span>Review Full Issue &amp; Evidence Ledger</span>
-                  <ArrowRight size={13} />
+                  <ArrowRight size={14} />
                 </Link>
               </div>
             </>
@@ -541,7 +514,10 @@ export default function OverviewClient({ initialIssues, stats }: Props) {
 
             <div className="px-4 py-2.5 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
               <span>📍 {selectedIssue.location_address}</span>
-              <span>GPS: {selectedIssue.lat.toFixed(5)}° N, {selectedIssue.lng.toFixed(5)}° E</span>
+              <span>
+                GPS: {selectedIssue.lat.toFixed(5)}° N,{" "}
+                {selectedIssue.lng.toFixed(5)}° E
+              </span>
             </div>
           </div>
         </div>

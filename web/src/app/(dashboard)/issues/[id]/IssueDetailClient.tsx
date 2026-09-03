@@ -394,14 +394,9 @@ export default function IssueDetailClient({ issue, reports, repair, workers }: P
                         "{report.description || "Visual civic incident logged."}"
                       </p>
                       <div className="flex items-center gap-3 text-[11px]">
-                        <span className="flex items-center gap-1 text-emerald-700 font-bold bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200">
-                          <ShieldCheck size={11} /> Verified Citizen
+                        <span className="flex items-center gap-1 text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                          <ShieldCheck size={11} /> Geotag Verified Citizen Report
                         </span>
-                        {report.ai_confidence && (
-                          <span className="text-slate-500 font-mono text-[10px]">
-                            AI Confidence: {Math.round(report.ai_confidence * 100)}%
-                          </span>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -542,12 +537,32 @@ export default function IssueDetailClient({ issue, reports, repair, workers }: P
                 {/* Action: Request More Evidence */}
                 <button
                   type="button"
-                  onClick={() =>
-                    setFeedbackMsg("📝 Request dispatched to citizen for higher-angle geotag photo.")
-                  }
-                  className="w-full py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-semibold text-xs rounded-sm transition"
+                  onClick={async () => {
+                    setLoadingAction("Requesting Evidence");
+                    try {
+                      const res = await fetch(`/api/issues/${issue.id}/request-evidence`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          message: "Municipal Authority has requested higher-angle / clearer photographic evidence for this civic defect."
+                        })
+                      });
+                      if (res.ok) {
+                        setFeedbackMsg("📨 Evidence Request sent directly to citizen's mobile app!");
+                      } else {
+                        setFeedbackMsg("⚠️ Could not reach notification service.");
+                      }
+                    } catch (err: any) {
+                      setFeedbackMsg(`❌ ${err.message}`);
+                    } finally {
+                      setLoadingAction(null);
+                      setTimeout(() => setFeedbackMsg(null), 5000);
+                    }
+                  }}
+                  disabled={loadingAction !== null}
+                  className="w-full py-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-semibold text-xs rounded-sm transition cursor-pointer"
                 >
-                  Request More Evidence
+                  {loadingAction === "Requesting Evidence" ? "Dispatching..." : "Request More Evidence from Citizen"}
                 </button>
 
                 {/* Action: Reject Issue */}

@@ -120,12 +120,6 @@ export default async function IssuesPage({
             Municipal complaints registry · Live geotagged feed
           </p>
         </div>
-        <div className="flex items-center gap-3">
-          <span className="flex items-center gap-1.5 text-xs text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-sm border border-emerald-200 font-bold shadow-xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Auto-Deduplication Active
-          </span>
-        </div>
       </div>
 
       {/* Filter Tabs */}

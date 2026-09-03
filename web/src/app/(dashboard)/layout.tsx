@@ -13,6 +13,8 @@ import {
   Settings,
 } from "lucide-react";
 
+import HeaderWardBadge from "./HeaderWardBadge";
+
 const NAV = [
   { label: "Overview", href: "/", icon: LayoutDashboard },
   { label: "Issues", href: "/issues", icon: ClipboardList },
@@ -80,16 +82,11 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       {/* ── Main ── */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
-        <header className="h-12 bg-amber-500 flex items-center px-6 justify-between shrink-0">
-          <span className="text-slate-900 font-bold text-xs tracking-widest uppercase">
-            Official Authority Dashboard · Department of Public Works
+        <header className="h-12 bg-amber-500 flex items-center px-6 justify-between shrink-0 shadow-xs">
+          <span className="text-slate-950 font-black text-xs tracking-widest uppercase truncate max-w-[400px]">
+            Official Authority Dashboard · Municipal Works
           </span>
-          <div className="flex items-center gap-2">
-            <span className="text-slate-900 text-xs font-medium">Ward 14 – Central Metro</span>
-            <div className="w-7 h-7 bg-slate-900 text-amber-400 rounded-full flex items-center justify-center text-xs font-bold">
-              PW
-            </div>
-          </div>
+          <HeaderWardBadge />
         </header>
 
         {/* Page */}
