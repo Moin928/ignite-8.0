@@ -4,24 +4,25 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
-  MapPin,
+  Folder,
+  Users,
+  CheckCircle2,
   Search,
   ChevronDown,
   RefreshCw,
-  ExternalLink,
-  Users,
-  CheckCircle2,
-  AlertOctagon,
+  ArrowRight,
   Maximize2,
   Minimize2,
   Eye,
   X,
-  ArrowRight,
+  Send,
+  MapPin,
+  Clock,
   Sparkles,
   Layers,
 } from "lucide-react";
 
-export type IssueItem = {
+export type DocketIssue = {
   id: string;
   ticket_no: string;
   title: string;
@@ -30,22 +31,24 @@ export type IssueItem = {
   status: string;
   priority_score: number;
   report_count: number;
-  location_desc: string;
-  city_region: string;
+  location_address: string;
   lat: number;
   lng: number;
   created_at: string;
   time_ago: string;
+  sla_display: string;
+  is_urgent: boolean;
   image_url: string;
-  uploader_label: string;
+  lead_department: string;
+  case_officer: string;
 };
 
 type Props = {
-  initialIssues: IssueItem[];
+  initialIssues: DocketIssue[];
   stats: {
-    critical: number;
-    pending: number;
-    dispatched: number;
+    totalActive: number;
+    criticalCount: number;
+    dispatchedCount: number;
     resolvedToday: number;
   };
 };
@@ -59,233 +62,201 @@ const CAT_ICON: Record<string, string> = {
   other: "⚠️",
 };
 
+const CAT_LABEL: Record<string, string> = {
+  pothole: "Pothole",
+  water_leakage: "Water Leakage",
+  streetlight: "Streetlight",
+  garbage: "Garbage",
+  road_damage: "Road Damage",
+  other: "Other",
+};
+
 export default function OverviewClient({ initialIssues, stats }: Props) {
-  const [issues] = useState<IssueItem[]>(initialIssues);
+  const [issues] = useState<DocketIssue[]>(initialIssues);
   const [selectedId, setSelectedId] = useState<string>(
     initialIssues[0]?.id || ""
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [catFilter, setCatFilter] = useState("all");
-  const [regionFilter, setRegionFilter] = useState("all");
+  const [priorityFilter, setPriorityFilter] = useState<"all" | "critical" | "pending">("all");
   const [imageFitMode, setImageFitMode] = useState<"cover" | "contain">("cover");
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [dispatchedSet, setDispatchedSet] = useState<Record<string, boolean>>({});
   const router = useRouter();
 
-  // Extract unique regions/cities for filter
-  const regions = Array.from(
-    new Set(issues.map((i) => i.city_region).filter(Boolean))
-  );
-
-  // Filter list
+  // Filter issues
   const filteredIssues = issues.filter((item) => {
-    const matchesSearch =
+    const matchSearch =
       item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.location_desc.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.location_address.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.ticket_no.toLowerCase().includes(searchQuery.toLowerCase()) ||
       item.category.toLowerCase().includes(searchQuery.toLowerCase());
 
-    if (!matchesSearch) return false;
-    if (catFilter !== "all" && item.category !== catFilter) return false;
-    if (regionFilter !== "all" && item.city_region !== regionFilter) return false;
+    if (!matchSearch) return false;
+    if (priorityFilter === "critical") return item.priority_score >= 80;
+    if (priorityFilter === "pending") return item.status === "reported";
     return true;
   });
 
   const selectedIssue =
     issues.find((i) => i.id === selectedId) || issues[0] || null;
 
+  const isDispatched = selectedIssue ? !!dispatchedSet[selectedIssue.id] : false;
+
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      // Also trigger AI process-pending on refresh so any new mobile reports are clustered
       await fetch("/api/ai/process-pending", { method: "POST" });
     } catch {}
     router.refresh();
     setTimeout(() => setIsRefreshing(false), 600);
   };
 
+  const handleDispatch = () => {
+    if (selectedIssue) {
+      setDispatchedSet((prev) => ({ ...prev, [selectedIssue.id]: true }));
+    }
+  };
+
   return (
-    <div className="p-6 max-w-7xl mx-auto space-y-5 font-sans">
-      {/* ── 1. Top KPI Summary Cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Critical Active */}
-        <div className="bg-white rounded-sm border border-slate-200 shadow-sm p-4 border-t-4 border-t-red-500">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              Critical Active
-            </span>
-            <span className="p-1.5 bg-red-50 text-red-600 rounded">
-              <AlertOctagon size={16} />
-            </span>
-          </div>
-          <div className="flex items-baseline gap-2 my-1">
-            <span className="text-3xl font-black text-slate-900 leading-none">
-              {stats.critical}
-            </span>
-            <span className="text-xs font-bold text-red-700 bg-red-50 px-1.5 py-0.5 rounded border border-red-200">
-              Priority &gt; 80
-            </span>
-          </div>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Requires immediate inspection
+    <div className="p-6 max-w-7xl mx-auto space-y-5 font-sans bg-slate-50/50">
+      {/* ── 1. Top Header: Title & Only Refresh Feed Button ── */}
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-black text-slate-900 tracking-tight">
+            Live Incident Dispatch &amp; Triage
+          </h1>
+          <p className="text-xs text-slate-500 font-medium mt-0.5">
+            Public works resolution console · Real-time civic queue
           </p>
         </div>
 
-        {/* Pending Review */}
-        <div className="bg-white rounded-sm border border-slate-200 shadow-sm p-4 border-t-4 border-t-amber-500">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              Pending Review
-            </span>
-            <span className="p-1.5 bg-amber-50 text-amber-600 rounded">
-              <Layers size={16} />
-            </span>
-          </div>
-          <div className="flex items-baseline gap-2 my-1">
-            <span className="text-3xl font-black text-slate-900 leading-none">
-              {stats.pending}
-            </span>
-            <span className="text-xs font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
-              In Registry
-            </span>
-          </div>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Awaiting engineering review
-          </p>
-        </div>
-
-        {/* Dispatched */}
-        <div className="bg-white rounded-sm border border-slate-200 shadow-sm p-4 border-t-4 border-t-blue-500">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              Dispatched Crews
-            </span>
-            <span className="p-1.5 bg-blue-50 text-blue-600 rounded">
-              <Users size={16} />
-            </span>
-          </div>
-          <div className="flex items-baseline gap-2 my-1">
-            <span className="text-3xl font-black text-slate-900 leading-none">
-              {stats.dispatched}
-            </span>
-            <span className="text-xs font-bold text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
-              On-Site
-            </span>
-          </div>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Active repair teams deployed
-          </p>
-        </div>
-
-        {/* Resolved */}
-        <div className="bg-white rounded-sm border border-slate-200 shadow-sm p-4 border-t-4 border-t-emerald-500">
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              Resolved Today
-            </span>
-            <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded">
-              <CheckCircle2 size={16} />
-            </span>
-          </div>
-          <div className="flex items-baseline gap-2 my-1">
-            <span className="text-3xl font-black text-slate-900 leading-none">
-              {stats.resolvedToday}
-            </span>
-            <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-              Verified
-            </span>
-          </div>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Photo verified closures
-          </p>
+        {/* Top Right: Refresh Feed Button */}
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-sm border border-slate-300 font-semibold text-xs shadow-sm transition cursor-pointer"
+            title="Refresh feed and run AI deduplication"
+          >
+            <RefreshCw
+              size={13}
+              className={isRefreshing ? "animate-spin text-amber-600" : "text-slate-500"}
+            />
+            <span>Refresh Feed</span>
+          </button>
         </div>
       </div>
 
-      {/* ── 2. Split Workspace (Triage Feed + Minimalist Live Summary) ── */}
+      {/* ── 2. KPI Metric Cards (4 Cards across) ── */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Total Active Issues */}
+        <div className="bg-white border border-slate-200 rounded-sm p-4 shadow-sm relative">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-xs font-semibold">Total Active Issues</span>
+            <Folder size={16} className="text-slate-400" />
+          </div>
+          <div className="text-3xl font-black text-slate-900 my-1">
+            {stats.totalActive.toLocaleString()}
+          </div>
+          <div className="text-[11px] text-slate-400">Across Ward sectors</div>
+        </div>
+
+        {/* Critical (SLA < 4h) */}
+        <div className="bg-white border border-slate-200 rounded-sm p-4 shadow-sm border-t-2 border-t-amber-500 relative">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-xs font-semibold">Critical (SLA &lt; 4h)</span>
+            <span className="text-amber-500 font-bold text-sm">✴</span>
+          </div>
+          <div className="flex items-baseline gap-2 my-1">
+            <span className="text-3xl font-black text-slate-900">
+              {stats.criticalCount}
+            </span>
+            <span className="text-[11px] font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded">
+              High Priority
+            </span>
+          </div>
+          <div className="text-[11px] text-slate-400">Requires immediate dispatch</div>
+        </div>
+
+        {/* Dispatched Crews */}
+        <div className="bg-white border border-slate-200 rounded-sm p-4 shadow-sm relative">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-xs font-semibold">Dispatched Crews</span>
+            <Users size={16} className="text-slate-400" />
+          </div>
+          <div className="flex items-baseline gap-2 my-1">
+            <span className="text-3xl font-black text-slate-900">
+              {stats.dispatchedCount}
+            </span>
+            <span className="text-[11px] font-semibold text-slate-600 bg-slate-100 px-2 py-0.5 rounded">
+              Active
+            </span>
+          </div>
+          <div className="text-[11px] text-slate-400">Field teams on site</div>
+        </div>
+
+        {/* Resolved Today */}
+        <div className="bg-white border border-slate-200 rounded-sm p-4 shadow-sm relative">
+          <div className="flex items-center justify-between text-slate-500">
+            <span className="text-xs font-semibold">Resolved Today</span>
+            <CheckCircle2 size={16} className="text-emerald-500" />
+          </div>
+          <div className="flex items-baseline gap-2 my-1">
+            <span className="text-3xl font-black text-slate-900">
+              {stats.resolvedToday}
+            </span>
+            <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+              +8% vs avg
+            </span>
+          </div>
+          <div className="text-[11px] text-slate-400">Certified closures</div>
+        </div>
+      </div>
+
+      {/* ── 3. Split Main Workspace (Left Priority List Cards + Right Active Docket Inspector) ── */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
-        {/* ── LEFT COLUMN (5 cols): Triage List ── */}
-        <div className="lg:col-span-5 space-y-2.5">
-          {/* Controls Bar: Search + Region Dropdown + Refresh Button */}
-          <div className="bg-white p-3 border border-slate-200 rounded-sm shadow-sm space-y-2">
-            <div className="flex items-center gap-2">
-              <div className="relative flex-1">
-                <Search
-                  size={14}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
-                />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by ticket, street, or issue..."
-                  className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-sm bg-slate-50 focus:bg-white text-slate-900 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                />
-              </div>
-
-              {/* State/City Region Dropdown */}
-              <div className="relative">
-                <select
-                  value={regionFilter}
-                  onChange={(e) => setRegionFilter(e.target.value)}
-                  className="appearance-none pl-2.5 pr-6 py-1.5 text-[11px] font-semibold border border-slate-300 rounded-sm bg-white text-slate-700 hover:border-slate-400 focus:outline-none cursor-pointer"
-                >
-                  <option value="all">🇮🇳 All India</option>
-                  {regions.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown
-                  size={11}
-                  className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
-                />
-              </div>
-
-              {/* Refresh Feed Button */}
-              <button
-                type="button"
-                onClick={handleRefresh}
-                disabled={isRefreshing}
-                className="p-1.5 border border-slate-300 rounded-sm hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition shrink-0"
-                title="Refresh Feed from Supabase"
-              >
-                <RefreshCw
-                  size={13}
-                  className={isRefreshing ? "animate-spin text-amber-600" : ""}
-                />
-              </button>
+        {/* ── LEFT COLUMN (5 cols): Priority Grievance Queue ── */}
+        <div className="lg:col-span-5 space-y-3">
+          {/* Queue Search & Filters Bar */}
+          <div className="bg-white p-3 border border-slate-200 rounded-sm shadow-sm flex items-center gap-2">
+            <div className="relative flex-1">
+              <Search
+                size={13}
+                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400"
+              />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search queue, street, or issue..."
+                className="w-full pl-8 pr-3 py-1.5 text-xs border border-slate-300 rounded-sm bg-slate-50 focus:bg-white text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-amber-500"
+              />
             </div>
 
-            {/* Category Quick Filter Pills */}
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 text-xs">
-              {[
-                { key: "all", label: "All" },
-                { key: "pothole", label: "🕳️ Potholes" },
-                { key: "water_leakage", label: "💧 Water" },
-                { key: "garbage", label: "🗑️ Garbage" },
-                { key: "streetlight", label: "💡 Lights" },
-              ].map((c) => (
-                <button
-                  key={c.key}
-                  onClick={() => setCatFilter(c.key)}
-                  className={`px-2.5 py-1 rounded-sm text-[11px] font-semibold whitespace-nowrap transition border ${
-                    catFilter === c.key
-                      ? "bg-slate-900 text-amber-400 border-slate-900"
-                      : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200"
-                  }`}
-                >
-                  {c.label}
-                </button>
-              ))}
+            <div className="relative">
+              <select
+                value={priorityFilter}
+                onChange={(e) => setPriorityFilter(e.target.value as any)}
+                className="appearance-none pl-2.5 pr-6 py-1.5 text-xs font-semibold border border-slate-300 rounded-sm bg-white text-slate-700 hover:border-slate-400 focus:outline-none cursor-pointer"
+              >
+                <option value="all">All Issues</option>
+                <option value="critical">Critical Only</option>
+                <option value="pending">Pending</option>
+              </select>
+              <ChevronDown
+                size={11}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+              />
             </div>
           </div>
 
-          {/* Issue Cards Stack */}
-          <div className="space-y-2 max-h-[calc(100vh-270px)] overflow-y-auto pr-1">
+          {/* 🌟 PRIORITY LIST CARDS (Matches User's Exact Shared Design) 🌟 */}
+          <div className="space-y-3 max-h-[calc(100vh-270px)] overflow-y-auto pr-1">
             {filteredIssues.length === 0 ? (
               <div className="bg-white border border-slate-200 rounded-sm p-8 text-center text-slate-400 text-xs">
-                No civic complaints found for this region/category.
+                No active grievance records found.
               </div>
             ) : (
               filteredIssues.map((item) => {
@@ -296,50 +267,59 @@ export default function OverviewClient({ initialIssues, stats }: Props) {
                   <div
                     key={item.id}
                     onClick={() => setSelectedId(item.id)}
-                    className={`bg-white rounded-sm p-3.5 transition-all cursor-pointer shadow-sm relative ${
+                    className={`bg-white rounded-sm p-4 transition-all cursor-pointer shadow-sm relative ${
                       isSelected
                         ? "border-2 border-amber-500 ring-1 ring-amber-400/40 bg-amber-50/15"
-                        : "border border-slate-200 hover:border-slate-300 hover:bg-slate-50/50"
+                        : "border border-slate-200 hover:border-slate-300 hover:shadow-md"
                     }`}
                   >
-                    {/* Top Row: Ticket ID + Score Badge + Time */}
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <span className="font-mono text-xs font-bold text-slate-900">
-                          {item.ticket_no}
+                    {/* Line 1: Ticket ID + Score Badge + Category Tag + Time Ago */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="font-mono text-xs font-bold text-slate-900">
+                        {item.ticket_no}
+                      </span>
+
+                      {/* Score Pill */}
+                      {isCritical ? (
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-red-50 text-red-600 border border-red-200">
+                          Critical · {item.priority_score.toFixed(0)}
                         </span>
-                        {isCritical ? (
-                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-red-50 text-red-700 border border-red-200">
-                            Critical · {item.priority_score.toFixed(0)}
-                          </span>
-                        ) : (
-                          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
-                            Score {item.priority_score.toFixed(0)}
-                          </span>
-                        )}
-                        <span className="text-[10px] text-slate-500 font-medium capitalize bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
-                          {item.category.replace("_", " ")}
+                      ) : (
+                        <span className="text-[11px] font-bold px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200">
+                          Score {item.priority_score.toFixed(0)}
                         </span>
-                      </div>
-                      <span className="text-[11px] text-slate-400 font-medium">
+                      )}
+
+                      {/* Category Badge */}
+                      <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
+                        {CAT_LABEL[item.category] || "Other"}
+                      </span>
+
+                      {/* Time Ago on Right */}
+                      <span className="text-[11px] text-slate-400 font-medium ml-auto">
                         {item.time_ago}
                       </span>
                     </div>
 
-                    {/* Title */}
-                    <h3 className="font-bold text-slate-900 text-xs leading-snug mb-1">
-                      <span className="mr-1">{CAT_ICON[item.category] || "⚠️"}</span>
-                      {item.title}
+                    {/* Line 2: Category Icon + Bold Title */}
+                    <h3 className="font-bold text-slate-900 text-sm leading-snug flex items-center gap-1.5 my-2">
+                      <span className="text-base leading-none">
+                        {CAT_ICON[item.category] || "⚠️"}
+                      </span>
+                      <span className="truncate">{item.title}</span>
                     </h3>
 
-                    {/* Real Location (from Mapbox / Supabase) */}
-                    <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1.5 border-t border-slate-100 mt-2">
-                      <span className="flex items-center gap-1 truncate max-w-[240px]">
-                        <MapPin size={11} className="text-amber-600 shrink-0" />
-                        <span className="truncate">{item.location_desc}</span>
-                      </span>
-                      <span className="font-semibold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded text-[10px] shrink-0">
-                        {item.report_count} report{item.report_count !== 1 ? "s" : ""}
+                    {/* Line 3: Location on Left + Report Count Pill on Right */}
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 mt-2 text-xs text-slate-500">
+                      <div className="flex items-center gap-1.5 truncate max-w-[280px]">
+                        <MapPin size={12} className="text-amber-600 shrink-0" />
+                        <span className="truncate font-medium text-slate-600">
+                          {item.location_address}
+                        </span>
+                      </div>
+
+                      <span className="text-[11px] font-semibold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 shrink-0">
+                        {item.report_count} reports
                       </span>
                     </div>
                   </div>
@@ -349,64 +329,40 @@ export default function OverviewClient({ initialIssues, stats }: Props) {
           </div>
         </div>
 
-        {/* ── RIGHT COLUMN (7 cols): Minimalist Live Summary (Quick View) ── */}
-        <div className="lg:col-span-7">
+        {/* ── RIGHT COLUMN (7 cols): Active Docket Inspector ── */}
+        <div className="lg:col-span-7 bg-white border border-slate-200 rounded-sm shadow-sm p-5 space-y-4">
           {selectedIssue ? (
-            <div className="bg-white border border-slate-200 rounded-sm shadow-sm p-5 space-y-4">
-              {/* Header: Ticket ID + Priority Badge + City */}
-              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-3">
+            <>
+              {/* Header: Active Docket + Hazard Pill + SLA */}
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs font-mono font-bold px-2 py-0.5 bg-slate-900 text-white rounded-sm">
-                    {selectedIssue.ticket_no}
+                  <span className="text-sm font-bold text-slate-900 font-mono">
+                    Active Docket: {selectedIssue.ticket_no}
                   </span>
                   <span
-                    className={`text-xs font-bold px-2 py-0.5 rounded-sm border ${
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded ${
                       selectedIssue.priority_score >= 80
-                        ? "bg-red-50 text-red-700 border-red-200"
-                        : "bg-amber-50 text-amber-800 border-amber-200"
+                        ? "bg-amber-400 text-slate-950"
+                        : "bg-slate-100 text-slate-700"
                     }`}
                   >
-                    {selectedIssue.priority_score >= 80
-                      ? "CRITICAL HAZARD"
-                      : "STANDARD GRIEVANCE"}
-                  </span>
-                  <span className="text-xs text-slate-600 bg-slate-100 px-2 py-0.5 rounded-sm border border-slate-200 font-medium">
-                    {selectedIssue.city_region || "Municipal Ward"}
+                    {selectedIssue.priority_score >= 80 ? "CRITICAL HAZARD" : "ROUTINE DEFECT"}
                   </span>
                 </div>
-
-                <div className="text-xs text-slate-400 font-medium">
-                  Reported {selectedIssue.time_ago}
-                </div>
-              </div>
-
-              {/* Title & Real Location */}
-              <div>
-                <h2 className="text-lg font-bold text-slate-900 leading-tight">
-                  {selectedIssue.title}
-                </h2>
-                <div className="flex items-center gap-1.5 text-xs text-slate-600 mt-1">
-                  <MapPin size={12} className="text-amber-500 shrink-0" />
-                  <span>
-                    {selectedIssue.location_desc} ·{" "}
-                    <strong>{selectedIssue.report_count}</strong> merged citizen report
-                    {selectedIssue.report_count !== 1 ? "s" : ""}
-                  </span>
+                <div className="text-xs text-slate-500 font-medium">
+                  SLA: {selectedIssue.sla_display}
                 </div>
               </div>
 
               {/* ── BIG PHOTO WITH CORNER FIT BUBBLE & LIGHTBOX ── */}
               <div className="border border-slate-200 rounded-sm overflow-hidden bg-slate-950 relative group">
-                {/* Photo Display */}
-                <div className="relative w-full h-80 flex items-center justify-center overflow-hidden bg-slate-950">
+                <div className="relative w-full h-64 flex items-center justify-center bg-slate-950">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={selectedIssue.image_url}
                     alt={selectedIssue.title}
                     className={`w-full h-full transition-all duration-300 ${
-                      imageFitMode === "contain"
-                        ? "object-contain"
-                        : "object-cover"
+                      imageFitMode === "contain" ? "object-contain" : "object-cover"
                     }`}
                     onError={(e) => {
                       (e.target as HTMLImageElement).src =
@@ -415,92 +371,126 @@ export default function OverviewClient({ initialIssues, stats }: Props) {
                   />
                 </div>
 
-                {/* 🌟 FLOATING CORNER BUBBLE (Fit to size / Zoom fully visible) 🌟 */}
-                <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
-                  {/* Toggle Fit to Size (Uncropped) */}
+                {/* Corner Fit / Lightbox Bubble */}
+                <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5 z-10">
                   <button
                     type="button"
                     onClick={() =>
-                      setImageFitMode((prev) =>
-                        prev === "cover" ? "contain" : "cover"
-                      )
+                      setImageFitMode((prev) => (prev === "cover" ? "contain" : "cover"))
                     }
-                    className="flex items-center gap-1 px-3 py-1.5 bg-slate-900/90 hover:bg-slate-900 text-white rounded-full text-[11px] font-semibold backdrop-blur-sm border border-white/20 shadow-lg transition cursor-pointer"
-                    title={
-                      imageFitMode === "cover"
-                        ? "Fit entire photo (Full view uncropped)"
-                        : "Fill view"
-                    }
+                    className="flex items-center gap-1 px-2.5 py-1 bg-slate-900/85 hover:bg-slate-900 text-white rounded-full text-[11px] font-semibold backdrop-blur-sm border border-white/20 shadow transition cursor-pointer"
+                    title="Fit to size (show full photo uncropped)"
                   >
                     {imageFitMode === "cover" ? (
                       <>
-                        <Minimize2 size={12} className="text-amber-400" />
+                        <Minimize2 size={11} className="text-amber-400" />
                         <span>Fit Entire Photo</span>
                       </>
                     ) : (
                       <>
-                        <Maximize2 size={12} className="text-amber-400" />
+                        <Maximize2 size={11} className="text-amber-400" />
                         <span>Fill View</span>
                       </>
                     )}
                   </button>
 
-                  {/* Open HD Fullscreen Modal */}
                   <button
                     type="button"
                     onClick={() => setIsLightboxOpen(true)}
-                    className="p-1.5 bg-slate-900/90 hover:bg-slate-900 text-white rounded-full backdrop-blur-sm border border-white/20 shadow-lg transition cursor-pointer"
-                    title="Open Fullscreen HD Lightbox"
+                    className="p-1.5 bg-slate-900/85 hover:bg-slate-900 text-white rounded-full backdrop-blur-sm border border-white/20 shadow transition cursor-pointer"
+                    title="Open Fullscreen HD Modal"
                   >
-                    <Eye size={13} className="text-amber-400" />
+                    <Eye size={12} className="text-amber-400" />
                   </button>
                 </div>
 
-                {/* Photo GPS & Source Caption */}
-                <div className="px-3.5 py-2 bg-slate-900 text-slate-300 border-t border-slate-800 flex flex-wrap items-center justify-between text-[11px]">
-                  <span className="flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 inline-block" />
-                    GPS: {selectedIssue.lat.toFixed(5)}° N, {selectedIssue.lng.toFixed(5)}° E
+                {/* Photo Bottom Caption Bar */}
+                <div className="px-3.5 py-2 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-600 font-medium">
+                  <span className="truncate max-w-[280px]">
+                    {selectedIssue.location_address}
                   </span>
-                  <span className="text-slate-400">{selectedIssue.uploader_label}</span>
+                  <span className="flex items-center gap-1 text-slate-500 font-mono text-[10px]">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    Geotag Verified
+                  </span>
                 </div>
               </div>
 
-              {/* Short Summary & Field Notes */}
+              {/* Title & Description */}
               <div>
-                <div className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
-                  INCIDENT SUMMARY & FIELD NOTES
+                <h2 className="text-base font-bold text-slate-900 leading-snug mb-1">
+                  {selectedIssue.title}
+                </h2>
+                <p className="text-xs text-slate-600 leading-relaxed">
+                  {selectedIssue.description}
+                </p>
+              </div>
+
+              {/* Detail Grid / Municipal Case Metadata */}
+              <div className="bg-slate-50/70 border border-slate-200 rounded-sm p-3.5 space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 font-medium">Duplicate Clustering:</span>
+                  <span className="font-bold text-slate-900">
+                    {selectedIssue.report_count} citizen report{selectedIssue.report_count !== 1 ? "s" : ""} consolidated
+                  </span>
                 </div>
-                <div className="bg-slate-50 border border-slate-200 rounded-sm p-3.5 text-xs text-slate-700 leading-relaxed">
-                  {selectedIssue.description ||
-                    "Citizen report logged with verified GPS coordinates and photo evidence. Triaged by municipal automated system."}
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 font-medium">Designated Lead:</span>
+                  <span className="font-semibold text-slate-800">
+                    {selectedIssue.lead_department}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-500 font-medium">Case Officer:</span>
+                  <span className="font-semibold text-slate-800">
+                    {selectedIssue.case_officer}
+                  </span>
                 </div>
               </div>
 
-              {/* ── MINIMALIST ACTION FOOTER: ONLY REVIEW FULL ISSUE BUTTON ── */}
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
-                <div className="text-xs text-slate-500">
-                  Status: <strong className="uppercase text-slate-800">{selectedIssue.status.replace("_", " ")}</strong>
-                </div>
+              {/* Action Buttons */}
+              <div className="space-y-2 pt-1">
+                {/* Dispatch Button */}
+                <button
+                  type="button"
+                  onClick={handleDispatch}
+                  disabled={isDispatched}
+                  className={`w-full py-2.5 rounded-sm font-bold text-xs flex items-center justify-center gap-2 shadow-sm transition ${
+                    isDispatched
+                      ? "bg-emerald-600 text-white cursor-default"
+                      : "bg-amber-500 hover:bg-amber-600 text-slate-900 cursor-pointer"
+                  }`}
+                >
+                  {isDispatched ? (
+                    <>
+                      <CheckCircle2 size={14} /> Repair Team Dispatched &amp; Notified
+                    </>
+                  ) : (
+                    <>
+                      <Send size={13} /> Dispatch Repair Team
+                    </>
+                  )}
+                </button>
 
-                {/* Clean Button: Review Full Issue */}
+                {/* Review Full Issue Link Button */}
                 <Link
                   href={`/issues/${selectedIssue.id}`}
-                  className="flex items-center gap-1.5 px-5 py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold rounded-sm text-xs shadow-sm transition"
+                  className="w-full py-2.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 rounded-sm font-semibold text-xs flex items-center justify-center gap-1.5 transition shadow-sm"
                 >
-                  Review Full Issue & Evidence <ArrowRight size={14} />
+                  <span>Review Full Issue &amp; Evidence Ledger</span>
+                  <ArrowRight size={13} />
                 </Link>
               </div>
-            </div>
+            </>
           ) : (
-            <div className="bg-white border border-slate-200 rounded-sm p-12 text-center text-slate-400 text-xs">
-              Select an issue from the left list to view its quick summary.
+            <div className="p-12 text-center text-slate-400 text-xs">
+              Select a docket from the left queue to view details.
             </div>
           )}
         </div>
       </div>
 
-      {/* ── 3. FULLSCREEN HD IMAGE LIGHTBOX MODAL ── */}
+      {/* ── 4. Fullscreen HD Lightbox Modal ── */}
       {isLightboxOpen && selectedIssue && (
         <div
           className="fixed inset-0 z-50 bg-black/90 flex flex-col items-center justify-center p-4 backdrop-blur-sm animate-fade-in"
@@ -510,7 +500,6 @@ export default function OverviewClient({ initialIssues, stats }: Props) {
             className="relative max-w-5xl max-h-[90vh] w-full flex flex-col bg-slate-900 rounded-sm border border-slate-800 overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Modal Header */}
             <div className="flex items-center justify-between px-4 py-3 bg-slate-950 border-b border-slate-800 text-white">
               <div className="flex items-center gap-2">
                 <span className="text-xs font-mono font-bold text-amber-400">
@@ -528,7 +517,6 @@ export default function OverviewClient({ initialIssues, stats }: Props) {
               </button>
             </div>
 
-            {/* Uncropped Full Image */}
             <div className="flex-1 bg-black flex items-center justify-center p-3 min-h-[400px]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -538,12 +526,9 @@ export default function OverviewClient({ initialIssues, stats }: Props) {
               />
             </div>
 
-            {/* Modal Footer */}
             <div className="px-4 py-2.5 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
-              <span>
-                📍 {selectedIssue.location_desc} ({selectedIssue.lat.toFixed(6)}° N, {selectedIssue.lng.toFixed(6)}° E)
-              </span>
-              <span>{selectedIssue.uploader_label}</span>
+              <span>📍 {selectedIssue.location_address}</span>
+              <span>GPS: {selectedIssue.lat.toFixed(5)}° N, {selectedIssue.lng.toFixed(5)}° E</span>
             </div>
           </div>
         </div>

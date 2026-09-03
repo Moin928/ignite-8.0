@@ -4,41 +4,72 @@
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
 
-// In-memory cache for reverse geocoding
+// In-memory cache for reverse geocoding to avoid redundant API calls
 const geoCache: Record<string, string> = {};
 
-// Fallback Indian bounding boxes & major cities for fast local resolution
-const INDIAN_CITIES = [
-  { name: "Bengaluru, Karnataka", lat: 12.9716, lng: 77.5946, radius: 0.5 },
-  { name: "Mumbai, Maharashtra", lat: 19.0760, lng: 72.8777, radius: 0.6 },
-  { name: "Delhi NCR", lat: 28.6139, lng: 77.2090, radius: 0.6 },
-  { name: "Hyderabad, Telangana", lat: 17.3850, lng: 78.4867, radius: 0.5 },
-  { name: "Chennai, Tamil Nadu", lat: 13.0827, lng: 80.2707, radius: 0.5 },
-  { name: "Pune, Maharashtra", lat: 18.5204, lng: 73.8567, radius: 0.4 },
-  { name: "Kolkata, West Bengal", lat: 22.5726, lng: 88.3639, radius: 0.5 },
-  { name: "Ahmedabad, Gujarat", lat: 23.0225, lng: 72.5714, radius: 0.5 },
-];
+/**
+ * Parse PostGIS geometry (EWKB hex, WKT string, GeoJSON object) into { lat, lng }
+ */
+export function parsePostGISPoint(loc: any): { lat: number; lng: number } | null {
+  if (!loc) return null;
+
+  // 1. GeoJSON object { type: "Point", coordinates: [lng, lat] }
+  if (typeof loc === "object" && loc.type === "Point" && Array.isArray(loc.coordinates)) {
+    return { lng: loc.coordinates[0], lat: loc.coordinates[1] };
+  }
+
+  // 2. WKT string "POINT(lng lat)"
+  if (typeof loc === "string" && loc.startsWith("POINT(")) {
+    const coords = loc.replace("POINT(", "").replace(")", "").trim().split(/\s+/);
+    const lng = parseFloat(coords[0]);
+    const lat = parseFloat(coords[1]);
+    if (!isNaN(lng) && !isNaN(lat)) return { lng, lat };
+  }
+
+  // 3. EWKB Hex string (e.g. 0101000020E6100000...)
+  if (typeof loc === "string" && loc.length >= 42 && /^[0-9A-Fa-f]+$/.test(loc)) {
+    try {
+      const buf = Buffer.from(loc, "hex");
+      const isLittleEndian = buf.readUInt8(0) === 1;
+      const type = isLittleEndian ? buf.readUInt32LE(1) : buf.readUInt32BE(1);
+      
+      // If type has SRID flag (0x20000000), offset for coords is 9 bytes
+      const hasSRID = (type & 0x20000000) !== 0;
+      const offset = hasSRID ? 9 : 5;
+
+      const lng = isLittleEndian ? buf.readDoubleLE(offset) : buf.readDoubleBE(offset);
+      const lat = isLittleEndian ? buf.readDoubleLE(offset + 8) : buf.readDoubleBE(offset + 8);
+
+      if (!isNaN(lng) && !isNaN(lat) && lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180) {
+        return { lng, lat };
+      }
+    } catch (e) {
+      console.warn("EWKB parsing error:", e);
+    }
+  }
+
+  return null;
+}
 
 /**
- * Reverse geocode [lng, lat] to a readable Indian street / city address
+ * Reverse geocode [lng, lat] to a readable Indian street / city address using Mapbox
  */
 export async function reverseGeocode(lng: number, lat: number): Promise<string> {
   const cacheKey = `${lat.toFixed(4)},${lng.toFixed(4)}`;
   if (geoCache[cacheKey]) return geoCache[cacheKey];
 
-  // Try Mapbox Reverse Geocoding API if token is available
   if (MAPBOX_TOKEN) {
     try {
-      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${MAPBOX_TOKEN}&country=IN&types=poi,address,neighborhood,locality,place`;
-      const res = await fetch(url, { next: { revalidate: 86400 } }); // Cache for 24h
+      const url = `https://api.mapbox.com/geocoding/v5/mapbox.places/${lng},${lat}.json?access_token=${MAPBOX_TOKEN}&country=IN&types=address,poi,neighborhood,locality,place`;
+      const res = await fetch(url, { next: { revalidate: 86400 } });
       if (res.ok) {
         const data = await res.json();
         if (data.features && data.features.length > 0) {
-          const placeName = data.features[0].place_name;
-          // Trim country name from end if present
-          const cleanName = placeName.replace(/, India$/, "");
-          geoCache[cacheKey] = cleanName;
-          return cleanName;
+          let placeName = data.features[0].place_name;
+          // Clean up Arabic commas or trailing India
+          placeName = placeName.replace(/،/g, ",").replace(/, India$/, "").trim();
+          geoCache[cacheKey] = placeName;
+          return placeName;
         }
       }
     } catch (err) {
@@ -46,31 +77,5 @@ export async function reverseGeocode(lng: number, lat: number): Promise<string> 
     }
   }
 
-  // Fallback: estimate nearest major Indian city
-  for (const city of INDIAN_CITIES) {
-    const dLat = Math.abs(city.lat - lat);
-    const dLng = Math.abs(city.lng - lng);
-    if (dLat < city.radius && dLng < city.radius) {
-      const result = `${city.name} (Ward Sector)`;
-      geoCache[cacheKey] = result;
-      return result;
-    }
-  }
-
   return `Lat ${lat.toFixed(4)}°, Lng ${lng.toFixed(4)}°`;
-}
-
-/**
- * Parse PostGIS POINT(lng lat) into coordinates object
- */
-export function parsePostGISPoint(loc: any): { lat: number; lng: number } | null {
-  if (!loc) return null;
-  if (typeof loc === "object" && loc.type === "Point" && Array.isArray(loc.coordinates)) {
-    return { lng: loc.coordinates[0], lat: loc.coordinates[1] };
-  }
-  if (typeof loc === "string" && loc.startsWith("POINT(")) {
-    const coords = loc.replace("POINT(", "").replace(")", "").split(" ");
-    return { lng: parseFloat(coords[0]), lat: parseFloat(coords[1]) };
-  }
-  return null;
 }
