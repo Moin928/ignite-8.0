@@ -21,13 +21,22 @@ class IssuesNotifier extends StateNotifier<AsyncValue<List<Issue>>> {
     try {
       final response = await _supabase
           .from('issues')
-          .select('*, reports(image_url)')
+          .select('*, reports(image_url), repairs(*)')
           .order('created_at', ascending: false);
 
       final issues = (response as List).map((json) => Issue.fromJson(json)).toList();
       state = AsyncValue.data(issues);
-    } catch (e, st) {
-      state = AsyncValue.error(e, st);
+    } catch (_) {
+      try {
+        final fallbackRes = await _supabase
+            .from('issues')
+            .select('*, reports(image_url)')
+            .order('created_at', ascending: false);
+        final issues = (fallbackRes as List).map((json) => Issue.fromJson(json)).toList();
+        state = AsyncValue.data(issues);
+      } catch (e2, st2) {
+        state = AsyncValue.error(e2, st2);
+      }
     }
   }
 
@@ -46,6 +55,14 @@ class IssuesNotifier extends StateNotifier<AsyncValue<List<Issue>>> {
           event: PostgresChangeEvent.all,
           schema: 'public',
           table: 'reports',
+          callback: (payload) {
+            fetchIssues();
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'repairs',
           callback: (payload) {
             fetchIssues();
           },

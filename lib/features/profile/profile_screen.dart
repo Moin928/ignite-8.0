@@ -14,9 +14,11 @@ class ProfileScreen extends ConsumerWidget {
     switch (status.toLowerCase().replaceAll(' ', '_')) {
       case 'resolved':
         return const Color(0xFF10B981);
+      case 'repaired':
+        return const Color(0xFF059669);
       case 'in_progress':
         return const Color(0xFFF59E0B);
-      case 'acknowledged':
+      case 'assigned':
         return const Color(0xFF8B5CF6);
       case 'rejected':
         return const Color(0xFFEF4444);
@@ -30,8 +32,10 @@ class ProfileScreen extends ConsumerWidget {
     switch (status.toLowerCase().replaceAll(' ', '_')) {
       case 'in_progress':
         return 'In Progress';
-      case 'acknowledged':
-        return 'Acknowledged';
+      case 'assigned':
+        return 'Assigned';
+      case 'repaired':
+        return 'Repaired';
       case 'resolved':
         return 'Resolved';
       case 'rejected':
@@ -68,7 +72,7 @@ class ProfileScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     const primaryColor = Color(0xFFF59E0B);
     final myReportsAsync = ref.watch(myReportsProvider);
-    final user = ref.read(authProvider).value;
+    final user = ref.watch(authProvider).value;
     final userName = (user?.userMetadata?['full_name'] as String?) ?? user?.email?.split('@').first ?? 'Citizen';
 
     return Scaffold(
@@ -183,19 +187,22 @@ class ProfileScreen extends ConsumerWidget {
                     myReportsAsync.when(
                       data: (reports) {
                         final total = reports.length;
-                        final inProgress = reports.where((r) {
+                        final active = reports.where((r) {
                           final st = r.issue?.status.toLowerCase().replaceAll(' ', '_');
-                          return st == 'in_progress' || st == 'acknowledged';
+                          return st == 'in_progress' || st == 'assigned';
                         }).length;
-                        final resolved = reports.where((r) => r.issue?.status.toLowerCase() == 'resolved').length;
+                        final completed = reports.where((r) {
+                          final st = r.issue?.status.toLowerCase().replaceAll(' ', '_');
+                          return st == 'repaired' || st == 'resolved';
+                        }).length;
 
                         return Row(
                           children: [
                             _buildStatBox('Total Reports', '$total', const Color(0xFF3B82F6)),
                             const SizedBox(width: 10),
-                            _buildStatBox('In Progress', '$inProgress', const Color(0xFFF59E0B)),
+                            _buildStatBox('In Progress', '$active', const Color(0xFFF59E0B)),
                             const SizedBox(width: 10),
-                            _buildStatBox('Resolved', '$resolved', const Color(0xFF10B981)),
+                            _buildStatBox('Resolved', '$completed', const Color(0xFF10B981)),
                           ],
                         );
                       },
@@ -456,7 +463,7 @@ class ProfileScreen extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.8,
+        initialChildSize: 0.82,
         maxChildSize: 0.95,
         minChildSize: 0.5,
         expand: false,
@@ -466,7 +473,6 @@ class ProfileScreen extends ConsumerWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Handle bar
               Center(
                 child: Container(
                   width: 40,
@@ -539,8 +545,101 @@ class ProfileScreen extends ConsumerWidget {
 
               const SizedBox(height: 18),
 
-              // Image View (Clickable to view full screen zoomable modal)
-              if (report.imageUrl.isNotEmpty) ...[
+              // Before & After Photo Proof Section (If repaired)
+              if (issue?.repair != null && issue!.repair!.afterImageUrl.isNotEmpty) ...[
+                const Text(
+                  'Before & After Repair Verification',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B)),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => FullScreenImageViewer.open(context, report.imageUrl, title: 'Before: Reported Issue'),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: CachedNetworkImage(
+                                imageUrl: report.imageUrl,
+                                height: 130,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFEF4444).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text('BEFORE (REPORTED)', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFFEF4444))),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => FullScreenImageViewer.open(context, issue.repair!.afterImageUrl, title: 'After: Official Repair Proof'),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: CachedNetworkImage(
+                                imageUrl: issue.repair!.afterImageUrl,
+                                height: 130,
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.1),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text('AFTER (REPAIRED)', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Color(0xFF10B981))),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (issue.repair!.notes != null && issue.repair!.notes!.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF1F5F9),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(Icons.handyman_rounded, size: 16, color: Color(0xFF64748B)),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            'Worker Notes: ${issue.repair!.notes!}',
+                            style: const TextStyle(fontSize: 12, color: Color(0xFF334155)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 20),
+              ] else if (report.imageUrl.isNotEmpty) ...[
+                // Standard single report image view
                 GestureDetector(
                   onTap: () => FullScreenImageViewer.open(context, report.imageUrl, title: title),
                   child: Stack(
@@ -589,7 +688,7 @@ class ProfileScreen extends ConsumerWidget {
                 const SizedBox(height: 20),
               ],
 
-              // Live Status Timeline Tracker (Handles Rejected, In Progress, Acknowledged, Resolved, Reported)
+              // 5-Stage Live Status Timeline Tracker
               const Text('Resolution Progress', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
               const SizedBox(height: 12),
               _buildTimeline(status, updatedAtStr),
@@ -709,9 +808,10 @@ class ProfileScreen extends ConsumerWidget {
 
     final stages = [
       {'key': 'reported', 'title': 'Reported', 'desc': 'Logged by citizen'},
-      {'key': 'acknowledged', 'title': 'Acknowledged', 'desc': 'Reviewed by municipal department'},
-      {'key': 'in_progress', 'title': 'In Progress', 'desc': 'Field workers dispatched to fix'},
-      {'key': 'resolved', 'title': 'Resolved', 'desc': 'Repairs verified & closed'},
+      {'key': 'assigned', 'title': 'Worker Assigned', 'desc': 'Government allocated field team'},
+      {'key': 'in_progress', 'title': 'In Progress', 'desc': 'Field repairs actively underway'},
+      {'key': 'repaired', 'title': 'Repaired', 'desc': 'Work finished & after-photo logged'},
+      {'key': 'resolved', 'title': 'Resolved', 'desc': 'Final municipal verification complete'},
     ];
 
     final currentIndex = stages.indexWhere((s) => s['key'] == normalized);
@@ -754,7 +854,7 @@ class ProfileScreen extends ConsumerWidget {
                   if (!isLast)
                     Container(
                       width: 2,
-                      height: 32,
+                      height: 34,
                       color: index < activeIndex ? const Color(0xFF10B981) : const Color(0xFFE2E8F0),
                     ),
                 ],

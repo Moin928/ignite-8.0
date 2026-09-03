@@ -43,7 +43,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
       'icon': Icons.delete_outline,
     },
     {
-      'id': 'broken_streetlight',
+      'id': 'streetlight',
       'label': 'Streetlight',
       'icon': Icons.lightbulb_outline,
     },
@@ -124,15 +124,13 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
     }
   }
 
-  Future<void> _pickImage(ImageSource source) async {
-    final status = source == ImageSource.camera
-        ? await Permission.camera.request()
-        : await Permission.photos.request();
+  Future<void> _capturePhoto() async {
+    final status = await Permission.camera.request();
 
     if (status.isGranted || status.isLimited) {
       final picker = ImagePicker();
       final pickedFile = await picker.pickImage(
-        source: source,
+        source: ImageSource.camera,
         imageQuality: 85,
         maxWidth: 1920,
       );
@@ -143,7 +141,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
       }
     } else if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Camera/Storage permission is required to capture photos.')),
+        const SnackBar(content: Text('Camera permission is required to capture photos of civic issues.')),
       );
     }
   }
@@ -241,6 +239,49 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                   });
                 },
                 child: const Text('Done'),
+              ),
+            ],
+          ),
+        );
+      }
+    } on SpamPhotoException catch (e) {
+      if (mounted) {
+        showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+            icon: const Icon(Icons.warning_amber_rounded, color: Color(0xFFEF4444), size: 48),
+            title: const Text(
+              'Invalid Photo Detected',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: Color(0xFF0F172A)),
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  e.reason,
+                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFFDC2626)),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'The uploaded photo does not appear to show a valid civic defect (such as a pothole, garbage dump, water leak, or broken streetlight).\n\nPlease capture a clear photo of the municipal issue.',
+                  style: TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.4),
+                ),
+              ],
+            ),
+            actions: [
+              ElevatedButton(
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  setState(() => _image = null);
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFFF59E0B),
+                  foregroundColor: const Color(0xFF0F172A),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+                child: const Text('Capture Again', style: TextStyle(fontWeight: FontWeight.bold)),
               ),
             ],
           ),
@@ -450,7 +491,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                     )
                   else
                     InkWell(
-                      onTap: () => _showPhotoPickerBottomSheet(context),
+                      onTap: _capturePhoto,
                       borderRadius: BorderRadius.circular(14),
                       child: Container(
                         height: 130,
@@ -468,15 +509,15 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                                 color: primaryColor.withValues(alpha: 0.12),
                                 shape: BoxShape.circle,
                               ),
-                              child: const Icon(Icons.add_a_photo_rounded, color: primaryColor, size: 28),
+                              child: const Icon(Icons.photo_camera_rounded, color: primaryColor, size: 28),
                             ),
                             const SizedBox(height: 8),
                             const Text(
-                              'Take Photo or Upload',
+                              'Open Camera to Take Photo',
                               style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13, color: Color(0xFF334155)),
                             ),
                             const Text(
-                              'Helps authorities locate and verify faster',
+                              'Live camera photo required for municipal verification',
                               style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
                             ),
                           ],
@@ -684,52 +725,6 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
                 subtitle,
                 style: const TextStyle(fontSize: 9, color: Color(0xFF94A3B8)),
                 textAlign: TextAlign.center,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  void _showPhotoPickerBottomSheet(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.white,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) => SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 16),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('Add Issue Photo', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
-              const SizedBox(height: 16),
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: const Color(0xFFF59E0B).withValues(alpha: 0.12), shape: BoxShape.circle),
-                  child: const Icon(Icons.camera_alt_rounded, color: Color(0xFFF59E0B)),
-                ),
-                title: const Text('Take Photo (Camera)', style: TextStyle(fontWeight: FontWeight.w600)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _pickImage(ImageSource.camera);
-                },
-              ),
-              ListTile(
-                leading: Container(
-                  padding: const EdgeInsets.all(10),
-                  decoration: BoxDecoration(color: const Color(0xFF3B82F6).withValues(alpha: 0.12), shape: BoxShape.circle),
-                  child: const Icon(Icons.photo_library_rounded, color: Color(0xFF3B82F6)),
-                ),
-                title: const Text('Choose from Gallery', style: TextStyle(fontWeight: FontWeight.w600)),
-                onTap: () {
-                  Navigator.pop(ctx);
-                  _pickImage(ImageSource.gallery);
-                },
               ),
             ],
           ),

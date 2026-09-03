@@ -1,4 +1,5 @@
 import 'dart:typed_data';
+import 'package:civic_app/models/repair.dart';
 
 class Issue {
   final String id;
@@ -14,6 +15,7 @@ class Issue {
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String? imageUrl;
+  final Repair? repair;
 
   Issue({
     required this.id,
@@ -29,7 +31,42 @@ class Issue {
     this.createdAt,
     this.updatedAt,
     this.imageUrl,
+    this.repair,
   });
+
+  Issue copyWith({
+    String? id,
+    String? title,
+    String? description,
+    String? category,
+    String? status,
+    String? severity,
+    double? priorityScore,
+    dynamic location,
+    String? assignedWorkerId,
+    int? reportCount,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    String? imageUrl,
+    Repair? repair,
+  }) {
+    return Issue(
+      id: id ?? this.id,
+      title: title ?? this.title,
+      description: description ?? this.description,
+      category: category ?? this.category,
+      status: status ?? this.status,
+      severity: severity ?? this.severity,
+      priorityScore: priorityScore ?? this.priorityScore,
+      location: location ?? this.location,
+      assignedWorkerId: assignedWorkerId ?? this.assignedWorkerId,
+      reportCount: reportCount ?? this.reportCount,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      imageUrl: imageUrl ?? this.imageUrl,
+      repair: repair ?? this.repair,
+    );
+  }
 
   double? get lat => location is Map ? (location as Map)['lat'] as double? : null;
   double? get lng => location is Map ? (location as Map)['lng'] as double? : null;
@@ -125,6 +162,15 @@ class Issue {
       }
     }
 
+    Repair? parsedRepair;
+    if (json['repairs'] != null) {
+      if (json['repairs'] is List && (json['repairs'] as List).isNotEmpty) {
+        parsedRepair = Repair.fromJson((json['repairs'] as List).first as Map<String, dynamic>);
+      } else if (json['repairs'] is Map) {
+        parsedRepair = Repair.fromJson(json['repairs'] as Map<String, dynamic>);
+      }
+    }
+
     return Issue(
       id: json['id']?.toString() ?? '',
       title: json['title'] ?? 'Civic Issue',
@@ -143,6 +189,7 @@ class Issue {
           ? DateTime.parse(json['updated_at'])
           : null,
       imageUrl: parsedImageUrl,
+      repair: parsedRepair,
     );
   }
 
@@ -161,6 +208,7 @@ class Issue {
       'created_at': createdAt?.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
       'image_url': imageUrl,
+      'repairs': repair?.toJson(),
     };
   }
 }

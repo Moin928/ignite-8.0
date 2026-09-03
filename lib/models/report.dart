@@ -25,6 +25,32 @@ class Report {
     this.issue,
   });
 
+  Report copyWith({
+    String? id,
+    String? issueId,
+    String? citizenId,
+    String? imageUrl,
+    String? description,
+    dynamic location,
+    bool? isSpam,
+    double? aiConfidence,
+    DateTime? createdAt,
+    Issue? issue,
+  }) {
+    return Report(
+      id: id ?? this.id,
+      issueId: issueId ?? this.issueId,
+      citizenId: citizenId ?? this.citizenId,
+      imageUrl: imageUrl ?? this.imageUrl,
+      description: description ?? this.description,
+      location: location ?? this.location,
+      isSpam: isSpam ?? this.isSpam,
+      aiConfidence: aiConfidence ?? this.aiConfidence,
+      createdAt: createdAt ?? this.createdAt,
+      issue: issue ?? this.issue,
+    );
+  }
+
   factory Report.fromJson(Map<String, dynamic> json) {
     return Report(
       id: json['id'],

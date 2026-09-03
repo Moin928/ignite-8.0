@@ -127,7 +127,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         return Icons.remove_road_rounded;
       case 'garbage':
         return Icons.delete_outline;
-      case 'broken_streetlight':
+      case 'streetlight':
         return Icons.lightbulb_outline;
       case 'water_leakage':
         return Icons.water_drop_outlined;
