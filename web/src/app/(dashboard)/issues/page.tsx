@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/db";
 import { AlertTriangle, Clock, CheckCircle2, XCircle, MapPin, Users, Search } from "lucide-react";
 import Link from "next/link";
+import AutoTriageButton from "./AutoTriageButton";
 
 export const dynamic = "force-dynamic";
 
@@ -97,6 +98,7 @@ export default async function IssuesPage({
           </p>
         </div>
         <div className="flex items-center gap-3">
+          <AutoTriageButton />
           <div className="relative">
             <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
