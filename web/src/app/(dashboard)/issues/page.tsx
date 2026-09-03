@@ -48,11 +48,16 @@ function getSLA(createdAt: string) {
   return { label: `${Math.floor(remaining / 24)}d ${remaining % 24}h left`, cls: "text-slate-500" };
 }
 
+import { runAutoDeduplication } from "@/utils/autoDedup";
+
 export default async function IssuesPage({
   searchParams,
 }: {
   searchParams: Promise<{ status?: string }>;
 }) {
+  // Automatically merge duplicates in real-time
+  await runAutoDeduplication();
+
   const { status: statusFilter } = await searchParams;
 
   let query = supabaseAdmin
@@ -116,7 +121,10 @@ export default async function IssuesPage({
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <AutoTriageButton />
+          <span className="flex items-center gap-1.5 text-xs text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded-sm border border-emerald-200 font-bold shadow-xs">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            Auto-Deduplication Active
+          </span>
         </div>
       </div>
 

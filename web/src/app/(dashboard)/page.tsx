@@ -50,7 +50,12 @@ const DEPT_MAP: Record<string, string> = {
   other: "Municipal Civil Engineering Dept",
 };
 
+import { runAutoDeduplication } from "@/utils/autoDedup";
+
 export default async function OverviewPage() {
+  // Automatically merge any unclustered duplicates in real-time
+  await runAutoDeduplication();
+
   // 1. Fetch 100% live data from Supabase
   const [issuesRes, reportsRes, countsRes] = await Promise.all([
     supabaseAdmin

@@ -1,10 +1,13 @@
 import { supabaseAdmin } from "@/lib/db";
 import { parsePostGISPoint, reverseGeocode } from "@/utils/geo";
+import { runAutoDeduplication } from "@/utils/autoDedup";
 import MapClient, { MapIssueItem } from "./MapClient";
 
 export const dynamic = "force-dynamic";
 
 export default async function MapPage() {
+  await runAutoDeduplication();
+
   const [issuesRes, reportsRes, countsRes] = await Promise.all([
     supabaseAdmin
       .from("issues")
