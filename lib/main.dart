@@ -30,6 +30,7 @@ class MyApp extends ConsumerWidget {
 
     return MaterialApp.router(
       title: 'Civic App',
+      debugShowCheckedModeBanner: true, 
       theme: ThemeData(
         scaffoldBackgroundColor: const Color(0xFFF8FAFC),
         colorScheme: ColorScheme.fromSeed(

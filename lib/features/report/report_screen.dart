@@ -35,7 +35,7 @@ class _ReportScreenState extends ConsumerState<ReportScreen> {
     {
       'id': 'pothole',
       'label': 'Pothole',
-      'icon': Icons.car_crash_outlined,
+      'icon': Icons.remove_road_rounded,
     },
     {
       'id': 'garbage',

@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:civic_app/features/auth/auth_provider.dart';
 import 'package:civic_app/features/profile/profile_provider.dart';
+import 'package:civic_app/core/image_viewer.dart';
 import 'package:civic_app/models/report.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -17,6 +18,8 @@ class ProfileScreen extends ConsumerWidget {
         return const Color(0xFFF59E0B);
       case 'acknowledged':
         return const Color(0xFF8B5CF6);
+      case 'rejected':
+        return const Color(0xFFEF4444);
       case 'reported':
       default:
         return const Color(0xFF3B82F6);
@@ -31,6 +34,8 @@ class ProfileScreen extends ConsumerWidget {
         return 'Acknowledged';
       case 'resolved':
         return 'Resolved';
+      case 'rejected':
+        return 'Rejected';
       case 'reported':
       default:
         return 'Reported';
@@ -47,6 +52,16 @@ class ProfileScreen extends ConsumerWidget {
     final hour = local.hour.toString().padLeft(2, '0');
     final minute = local.minute.toString().padLeft(2, '0');
     return '${months[local.month - 1]} ${local.day}, ${local.year} • $hour:$minute';
+  }
+
+  String _formatTimeAgo(DateTime? dt) {
+    if (dt == null) return '';
+    final diff = DateTime.now().difference(dt.toLocal());
+    if (diff.inMinutes < 1) return 'just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    if (diff.inDays < 7) return '${diff.inDays}d ago';
+    return _formatDate(dt);
   }
 
   @override
@@ -96,7 +111,7 @@ class ProfileScreen extends ConsumerWidget {
         ],
       ),
       body: RefreshIndicator(
-        onRefresh: () async => ref.refresh(myReportsProvider),
+        onRefresh: () async => ref.read(myReportsProvider.notifier).fetchReports(),
         color: primaryColor,
         child: CustomScrollView(
           slivers: [
@@ -168,12 +183,15 @@ class ProfileScreen extends ConsumerWidget {
                     myReportsAsync.when(
                       data: (reports) {
                         final total = reports.length;
-                        final inProgress = reports.where((r) => r.issue?.status == 'in_progress' || r.issue?.status == 'acknowledged').length;
-                        final resolved = reports.where((r) => r.issue?.status == 'resolved').length;
+                        final inProgress = reports.where((r) {
+                          final st = r.issue?.status.toLowerCase().replaceAll(' ', '_');
+                          return st == 'in_progress' || st == 'acknowledged';
+                        }).length;
+                        final resolved = reports.where((r) => r.issue?.status.toLowerCase() == 'resolved').length;
 
                         return Row(
                           children: [
-                            _buildStatBox('Reports', '$total', const Color(0xFF3B82F6)),
+                            _buildStatBox('Total Reports', '$total', const Color(0xFF3B82F6)),
                             const SizedBox(width: 10),
                             _buildStatBox('In Progress', '$inProgress', const Color(0xFFF59E0B)),
                             const SizedBox(width: 10),
@@ -196,13 +214,21 @@ class ProfileScreen extends ConsumerWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text(
-                      'My Submitted Reports',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                    const Row(
+                      children: [
+                        Text(
+                          'My Reports',
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A)),
+                        ),
+                        SizedBox(width: 8),
+                        Icon(Icons.fiber_manual_record, size: 10, color: Color(0xFF10B981)),
+                        SizedBox(width: 4),
+                        Text('Live', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF10B981))),
+                      ],
                     ),
                     IconButton(
                       icon: const Icon(Icons.refresh_rounded, size: 20, color: Color(0xFF64748B)),
-                      onPressed: () => ref.refresh(myReportsProvider),
+                      onPressed: () => ref.read(myReportsProvider.notifier).fetchReports(),
                     ),
                   ],
                 ),
@@ -241,6 +267,7 @@ class ProfileScreen extends ConsumerWidget {
                       final statusColor = _getStatusColor(status);
                       final title = report.issue?.title ?? report.description ?? 'Civic Issue';
                       final dateStr = _formatDate(report.createdAt);
+                      final updatedStr = report.issue?.updatedAt != null ? _formatTimeAgo(report.issue!.updatedAt) : null;
 
                       return InkWell(
                         onTap: () => _showReportDetailModal(context, report),
@@ -258,25 +285,59 @@ class ProfileScreen extends ConsumerWidget {
                           child: Row(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              // Cloudinary Image Thumbnail
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(12),
-                                child: Container(
-                                  width: 72,
-                                  height: 72,
-                                  color: const Color(0xFFF1F5F9),
-                                  child: report.imageUrl.isNotEmpty
-                                      ? CachedNetworkImage(
+                              // Image Thumbnail with zoom trigger
+                              if (report.imageUrl.isNotEmpty)
+                                GestureDetector(
+                                  onTap: () => FullScreenImageViewer.open(context, report.imageUrl, title: title),
+                                  child: Stack(
+                                    children: [
+                                      ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: CachedNetworkImage(
                                           imageUrl: report.imageUrl,
+                                          width: 76,
+                                          height: 76,
                                           fit: BoxFit.cover,
-                                          placeholder: (context, url) => const Center(
-                                            child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                                          placeholder: (context, url) => Container(
+                                            width: 76,
+                                            height: 76,
+                                            color: const Color(0xFFF1F5F9),
+                                            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
                                           ),
-                                          errorWidget: (context, url, error) => const Icon(Icons.broken_image_rounded, color: Color(0xFF94A3B8)),
-                                        )
-                                      : const Icon(Icons.image_outlined, color: Color(0xFF94A3B8)),
+                                          errorWidget: (context, url, error) => Container(
+                                            width: 76,
+                                            height: 76,
+                                            color: const Color(0xFFF1F5F9),
+                                            child: const Icon(Icons.broken_image_rounded, color: Color(0xFF94A3B8)),
+                                          ),
+                                        ),
+                                      ),
+                                      Positioned(
+                                        bottom: 3,
+                                        right: 3,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(3),
+                                          decoration: BoxDecoration(
+                                            color: Colors.black.withValues(alpha: 0.6),
+                                            shape: BoxShape.circle,
+                                          ),
+                                          child: const Icon(Icons.fullscreen_rounded, color: Colors.white, size: 12),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else
+                                Container(
+                                  width: 76,
+                                  height: 76,
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: const Icon(Icons.image_outlined, color: Color(0xFF94A3B8)),
                                 ),
-                              ),
+
                               const SizedBox(width: 14),
 
                               // Info Column
@@ -326,12 +387,11 @@ class ProfileScreen extends ConsumerWidget {
                                           dateStr,
                                           style: const TextStyle(fontSize: 11, color: Color(0xFF94A3B8)),
                                         ),
-                                        const Row(
-                                          children: [
-                                            Text('Details', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF3B82F6))),
-                                            Icon(Icons.chevron_right_rounded, size: 14, color: Color(0xFF3B82F6)),
-                                          ],
-                                        ),
+                                        if (updatedStr != null)
+                                          Text(
+                                            'Updated $updatedStr',
+                                            style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: statusColor),
+                                          ),
                                       ],
                                     ),
                                   ],
@@ -372,7 +432,7 @@ class ProfileScreen extends ConsumerWidget {
           children: [
             Text(count, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
             const SizedBox(height: 2),
-            Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF64748B))),
+            Text(label, style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: Color(0xFF64748B)), textAlign: TextAlign.center),
           ],
         ),
       ),
@@ -385,6 +445,8 @@ class ProfileScreen extends ConsumerWidget {
     final statusColor = _getStatusColor(status);
     final title = issue?.title ?? report.description ?? 'Civic Issue';
     final dateStr = _formatDate(report.createdAt);
+    final updatedAtStr = _formatDate(issue?.updatedAt ?? report.createdAt);
+    final timeAgo = _formatTimeAgo(issue?.updatedAt ?? report.createdAt);
 
     showModalBottomSheet(
       context: context,
@@ -394,9 +456,9 @@ class ProfileScreen extends ConsumerWidget {
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) => DraggableScrollableSheet(
-        initialChildSize: 0.75,
+        initialChildSize: 0.8,
         maxChildSize: 0.95,
-        minChildSize: 0.45,
+        minChildSize: 0.5,
         expand: false,
         builder: (_, scrollController) => SingleChildScrollView(
           controller: scrollController,
@@ -453,34 +515,84 @@ class ProfileScreen extends ConsumerWidget {
 
               const SizedBox(height: 18),
 
-              // Image View
+              // Status Last Updated Card
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.2)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.schedule_rounded, size: 18, color: statusColor),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Status updated: $updatedAtStr ($timeAgo)',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: statusColor),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(height: 18),
+
+              // Image View (Clickable to view full screen zoomable modal)
               if (report.imageUrl.isNotEmpty) ...[
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: CachedNetworkImage(
-                    imageUrl: report.imageUrl,
-                    height: 210,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
-                      height: 210,
-                      color: const Color(0xFFF1F5F9),
-                      child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                    ),
-                    errorWidget: (context, url, error) => Container(
-                      height: 210,
-                      color: const Color(0xFFF1F5F9),
-                      child: const Center(child: Icon(Icons.broken_image_rounded, size: 40, color: Color(0xFF94A3B8))),
-                    ),
+                GestureDetector(
+                  onTap: () => FullScreenImageViewer.open(context, report.imageUrl, title: title),
+                  child: Stack(
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(16),
+                        child: CachedNetworkImage(
+                          imageUrl: report.imageUrl,
+                          height: 210,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          placeholder: (context, url) => Container(
+                            height: 210,
+                            color: const Color(0xFFF1F5F9),
+                            child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                          ),
+                          errorWidget: (context, url, error) => Container(
+                            height: 210,
+                            color: const Color(0xFFF1F5F9),
+                            child: const Center(child: Icon(Icons.broken_image_rounded, size: 40, color: Color(0xFF94A3B8))),
+                          ),
+                        ),
+                      ),
+                      Positioned(
+                        bottom: 10,
+                        right: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.zoom_in_rounded, color: Colors.white, size: 16),
+                              SizedBox(width: 4),
+                              Text('Tap to enlarge', style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 const SizedBox(height: 20),
               ],
 
-              // Live Status Timeline Tracker
+              // Live Status Timeline Tracker (Handles Rejected, In Progress, Acknowledged, Resolved, Reported)
               const Text('Resolution Progress', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFF1E293B))),
               const SizedBox(height: 12),
-              _buildTimeline(status),
+              _buildTimeline(status, updatedAtStr),
 
               const SizedBox(height: 20),
 
@@ -556,15 +668,53 @@ class ProfileScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildTimeline(String currentStatus) {
+  Widget _buildTimeline(String currentStatus, String updatedAtStr) {
+    final normalized = currentStatus.toLowerCase().replaceAll(' ', '_');
+
+    if (normalized == 'rejected') {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: const Color(0xFFEF4444).withValues(alpha: 0.08),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.25)),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.cancel_rounded, color: Color(0xFFEF4444), size: 22),
+                SizedBox(width: 8),
+                Text(
+                  'Issue Rejected / Closed',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Color(0xFFEF4444)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'This report was reviewed by municipal officers and marked as rejected (e.g. duplicate, private property, or non-actionable).',
+              style: TextStyle(fontSize: 12, color: Color(0xFF475569), height: 1.4),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Closed on $updatedAtStr',
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF94A3B8)),
+            ),
+          ],
+        ),
+      );
+    }
+
     final stages = [
       {'key': 'reported', 'title': 'Reported', 'desc': 'Logged by citizen'},
-      {'key': 'acknowledged', 'title': 'Acknowledged', 'desc': 'Reviewed by department'},
-      {'key': 'in_progress', 'title': 'In Progress', 'desc': 'Field workers dispatched'},
+      {'key': 'acknowledged', 'title': 'Acknowledged', 'desc': 'Reviewed by municipal department'},
+      {'key': 'in_progress', 'title': 'In Progress', 'desc': 'Field workers dispatched to fix'},
       {'key': 'resolved', 'title': 'Resolved', 'desc': 'Repairs verified & closed'},
     ];
 
-    final currentIndex = stages.indexWhere((s) => s['key'] == currentStatus.toLowerCase().replaceAll(' ', '_'));
+    final currentIndex = stages.indexWhere((s) => s['key'] == normalized);
     final activeIndex = currentIndex == -1 ? 0 : currentIndex;
 
     return Container(
@@ -616,13 +766,28 @@ class ProfileScreen extends ConsumerWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        stage['title']!,
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: isCompleted ? FontWeight.bold : FontWeight.w500,
-                          color: isCompleted ? const Color(0xFF0F172A) : const Color(0xFF94A3B8),
-                        ),
+                      Row(
+                        children: [
+                          Text(
+                            stage['title']!,
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: isCompleted ? FontWeight.bold : FontWeight.w500,
+                              color: isCompleted ? const Color(0xFF0F172A) : const Color(0xFF94A3B8),
+                            ),
+                          ),
+                          if (isCurrent) ...[
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: const Text('CURRENT', style: TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Color(0xFFD97706))),
+                            ),
+                          ],
+                        ],
                       ),
                       Text(
                         stage['desc']!,
