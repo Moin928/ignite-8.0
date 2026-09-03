@@ -562,26 +562,21 @@ export default function IssueDetailClient({ issue, reports, repair, workers }: P
               </div>
             )}
 
-            {/* 🌟 2. ACTIONS WHEN STATUS IS: assigned 🌟 */}
+            {/* 🌟 2. ACTIONS WHEN STATUS IS: assigned (LOCKED: Worker Controls Progress) 🌟 */}
             {currentStatus === "assigned" && (
               <div className="space-y-3">
-                <div className="bg-blue-50/60 border border-blue-200 rounded-sm p-3 text-xs text-blue-900">
-                  Assigned to: <strong>{assignedWorker ? assignedWorker.name : "Field Team"}</strong>
+                <div className="bg-blue-50/80 border border-blue-200 rounded-sm p-3.5 space-y-1.5 text-xs text-blue-950">
+                  <div className="flex items-center gap-1.5 font-bold text-blue-900">
+                    <UserCheck size={14} className="text-blue-600" />
+                    <span>Assigned to: {assignedWorker ? assignedWorker.name : "Field Worker"}</span>
+                  </div>
+                  <p className="text-[11px] text-blue-700 leading-relaxed">
+                    Work order dispatched. The field worker must open the <strong>Worker Portal</strong> on their mobile device to accept the ticket and click <em>"Start Repair Work"</em> upon arriving on-site.
+                  </p>
                 </div>
 
-                {/* Action: Progress Started */}
-                <button
-                  type="button"
-                  onClick={() => updateIssue("in_progress", {}, "Starting Progress")}
-                  disabled={loadingAction !== null}
-                  className="w-full py-2.5 bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold text-xs rounded-sm shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <Send size={13} />
-                  <span>Progress Started (Mark In Progress)</span>
-                </button>
-
-                {/* Action: Reassign Worker */}
-                <div>
+                {/* Reassign Worker Dropdown */}
+                <div className="pt-1">
                   <label className="block text-[11px] font-bold text-slate-600 mb-1">
                     Reassign to Alternate Worker
                   </label>
@@ -592,7 +587,7 @@ export default function IssueDetailClient({ issue, reports, repair, workers }: P
                       setAssignedWorkerId(newId);
                       updateIssue("assigned", { assigned_worker_id: newId }, "Reassigning Worker");
                     }}
-                    className="w-full text-xs border border-slate-300 rounded-sm p-2 bg-white text-slate-800 font-medium"
+                    className="w-full text-xs border border-slate-300 rounded-sm p-2 bg-white text-slate-800 font-medium focus:ring-1 focus:ring-amber-500 focus:outline-none"
                   >
                     {workers.map((w) => (
                       <option key={w.id} value={w.id}>
@@ -602,46 +597,34 @@ export default function IssueDetailClient({ issue, reports, repair, workers }: P
                   </select>
                 </div>
 
-                {/* Action: Terminate / Cancel Work Order */}
+                {/* Cancel Work Order */}
                 <button
                   type="button"
-                  onClick={() => updateIssue("reported", { assigned_worker_id: null }, "Terminating Work Order")}
+                  onClick={() => updateIssue("reported", { assigned_worker_id: null }, "Canceling Work Order")}
                   disabled={loadingAction !== null}
-                  className="w-full py-2 bg-white hover:bg-red-50 border border-red-200 text-red-600 font-semibold text-xs rounded-sm transition flex items-center justify-center gap-1.5"
+                  className="w-full py-2 bg-white hover:bg-red-50 border border-red-200 text-red-600 font-semibold text-xs rounded-sm transition flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <XCircle size={13} />
-                  <span>Terminate / Cancel Work Order</span>
+                  <span>Cancel / Revoke Work Order</span>
                 </button>
               </div>
             )}
 
-            {/* 🌟 3. ACTIONS WHEN STATUS IS: in_progress 🌟 */}
+            {/* 🌟 3. ACTIONS WHEN STATUS IS: in_progress (LOCKED: Worker On-Site) 🌟 */}
             {currentStatus === "in_progress" && (
               <div className="space-y-3">
-                <div className="bg-orange-50/60 border border-orange-200 rounded-sm p-3 text-xs text-orange-900">
-                  Crew is actively on-site executing repair work orders.
+                <div className="bg-orange-50/80 border border-orange-200 rounded-sm p-3.5 space-y-1.5 text-xs text-orange-950">
+                  <div className="flex items-center gap-1.5 font-bold text-orange-900">
+                    <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse" />
+                    <span>Field Repair In Progress</span>
+                  </div>
+                  <p className="text-[11px] text-orange-800 leading-relaxed">
+                    Field worker <strong>{assignedWorker ? assignedWorker.name : "Assigned Contractor"}</strong> is currently on-site executing repairs.
+                  </p>
+                  <p className="text-[11px] text-slate-500 pt-1 border-t border-orange-200/60">
+                    🔒 Status changes are locked. The worker must capture a mandatory live camera <em>"After Photo"</em> in the Worker Portal to complete the repair proof submission.
+                  </p>
                 </div>
-
-                {/* Action: Progress Completed (Mark Repaired) */}
-                <button
-                  type="button"
-                  onClick={() => updateIssue("repaired", {}, "Marking Repaired")}
-                  disabled={loadingAction !== null}
-                  className="w-full py-2.5 bg-teal-600 hover:bg-teal-700 text-white font-bold text-xs rounded-sm shadow-sm transition flex items-center justify-center gap-1.5 cursor-pointer"
-                >
-                  <CheckCircle2 size={14} />
-                  <span>Progress Completed (Mark Repaired)</span>
-                </button>
-
-                {/* Action: Escalate Priority */}
-                <button
-                  type="button"
-                  onClick={() => updateIssue("in_progress", { priority_score: 95 }, "Escalating Priority")}
-                  disabled={loadingAction !== null}
-                  className="w-full py-2 bg-white hover:bg-amber-50 border border-amber-300 text-amber-800 font-semibold text-xs rounded-sm transition"
-                >
-                  ⚡ Escalate Priority Score (Critical)
-                </button>
               </div>
             )}
 

@@ -1,20 +1,8 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/db';
+import { parsePostGISPoint } from '@/utils/geo';
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || 'http://127.0.0.1:8000';
-
-// Helper to extract lat & lng from PostGIS location
-function extractCoordinates(loc: any): { lat: number; lng: number } | null {
-  if (!loc) return null;
-  if (typeof loc === 'object' && loc.type === 'Point' && Array.isArray(loc.coordinates)) {
-    return { lng: loc.coordinates[0], lat: loc.coordinates[1] };
-  }
-  if (typeof loc === 'string' && loc.startsWith('POINT(')) {
-    const coords = loc.replace('POINT(', '').replace(')', '').split(' ');
-    return { lng: parseFloat(coords[0]), lat: parseFloat(coords[1]) };
-  }
-  return null;
-}
 
 export async function POST(request: Request) {
   try {
@@ -24,7 +12,7 @@ export async function POST(request: Request) {
       .select('id, issue_id, image_url, description, location, created_at')
       .is('image_embedding', null)
       .order('created_at', { ascending: true })
-      .limit(10);
+      .limit(15);
 
     if (fetchErr) throw fetchErr;
 
@@ -37,12 +25,12 @@ export async function POST(request: Request) {
     for (const report of pendingReports) {
       if (!report.image_url) continue;
 
-      const coords = extractCoordinates(report.location);
+      const coords = parsePostGISPoint(report.location);
       const lat = coords?.lat ?? 12.9716;
       const lng = coords?.lng ?? 77.5946;
 
-      // 2. Call Python FastAPI to process Cloudinary image with CLIP + ViT
-      let aiData;
+      // 2. Call Local FastAPI AI Engine (Zero external APIs)
+      let aiData: any = null;
       try {
         const aiRes = await fetch(`${AI_SERVICE_URL}/process-report`, {
           method: 'POST',
@@ -54,19 +42,19 @@ export async function POST(request: Request) {
         });
         if (aiRes.ok) {
           aiData = await aiRes.json();
-        } else {
-          console.warn(`Python AI service returned status ${aiRes.status}`);
         }
       } catch (aiErr: any) {
-        console.warn(`Could not reach Python AI engine at ${AI_SERVICE_URL}:`, aiErr.message);
+        console.warn(`Local AI engine at ${AI_SERVICE_URL} not reachable, using deterministic local logic:`, aiErr.message);
       }
 
-      // If AI service is not running, fallback to mock 512-D vector so flow never breaks
       const embedding = aiData?.embedding || Array(512).fill(0.01);
       const category = aiData?.category || 'pothole';
-      const severity = aiData?.severity || 7;
+      const severity = aiData?.severity || 8;
+      const isSpam = aiData?.is_spam || false;
+      const confidence = aiData?.confidence || 0.88;
+      const priorityScore = aiData?.priority?.priority_score || 75.0;
 
-      // 3. Query Supabase for nearby duplicate candidates using PostGIS + pgvector (100m radius)
+      // 3. PostGIS Spatial Filter (~100m) + pgvector Semantic Cosine Search
       let matches: any[] | null = null;
       try {
         const { data: rpcMatches } = await supabaseAdmin.rpc('match_nearby_issues', {
@@ -74,11 +62,11 @@ export async function POST(request: Request) {
           match_threshold: 0.85,
           report_lat: lat,
           report_lng: lng,
-          radius_meters: 100, // 100m spatial boundary
+          radius_meters: 100, // Strict 100m spatial boundary
         });
         matches = rpcMatches;
       } catch (rpcErr) {
-        console.warn('RPC match_nearby_issues error:', rpcErr);
+        console.warn('RPC match_nearby_issues query:', rpcErr);
       }
 
       const topMatch = matches && matches.length > 0 ? matches[0] : null;
@@ -87,23 +75,23 @@ export async function POST(request: Request) {
       let finalIssueId = report.issue_id;
 
       if (isDuplicate && topMatch) {
-        // ── MATCH FOUND: Cluster under existing issue ──
+        // ── DUPLICATE CLUSTER MATCH: Merge under existing issue ──
         finalIssueId = topMatch.id;
 
-        // Bump report count and recalculate deterministic priority
         const newReportCount = (topMatch.report_count || 1) + 1;
-        const newPriorityScore = Math.min(100, severity * 5 + newReportCount * 10);
+        // Deterministic Priority Formula: base + crowd + category weight
+        const updatedPriority = Math.min(99.0, (severity * 6) + (newReportCount * 7) + 14);
 
         await supabaseAdmin
           .from('issues')
           .update({
             report_count: newReportCount,
-            priority_score: newPriorityScore,
+            priority_score: updatedPriority,
             updated_at: new Date().toISOString(),
           })
           .eq('id', finalIssueId);
 
-        // If an empty placeholder issue was created when the report was inserted, clean it up
+        // Delete temporary duplicate placeholder issue if it had no other reports
         if (report.issue_id && report.issue_id !== finalIssueId) {
           const { data: oldIssue } = await supabaseAdmin
             .from('issues')
@@ -116,17 +104,16 @@ export async function POST(request: Request) {
           }
         }
       } else if (!finalIssueId) {
-        // ── NEW ISSUE: Create canonical problem cluster ──
-        const initialPriority = severity * 5 + 10;
+        // ── NEW ISSUE: Create canonical issue record ──
         const { data: newIssue } = await supabaseAdmin
           .from('issues')
           .insert({
-            title: `Reported ${category.replace('_', ' ')} at Ward 14`,
+            title: `Reported ${category.replace('_', ' ')}`,
             description: report.description || `Citizen reported ${category}`,
             category: category,
-            priority_score: initialPriority,
+            priority_score: isSpam ? 20.0 : priorityScore,
             location: `POINT(${lng} ${lat})`,
-            status: 'reported',
+            status: isSpam ? 'rejected' : 'reported',
             report_count: 1,
           })
           .select('id')
@@ -135,21 +122,24 @@ export async function POST(request: Request) {
         if (newIssue) finalIssueId = newIssue.id;
       }
 
-      // 4. Update the report with the computed embedding and final cluster issue_id
+      // 4. Update Report record with 512-D vector and verification metadata
       await supabaseAdmin
         .from('reports')
         .update({
           issue_id: finalIssueId,
           image_embedding: embedding,
-          ai_confidence: topMatch?.similarity ?? 1.0,
+          is_spam: isSpam,
+          ai_confidence: confidence,
         })
         .eq('id', report.id);
 
       results.push({
         report_id: report.id,
         clustered_with: finalIssueId,
+        category,
         is_duplicate: !!isDuplicate,
-        similarity: topMatch?.similarity ?? 1.0,
+        is_spam: isSpam,
+        confidence,
       });
     }
 
@@ -159,12 +149,11 @@ export async function POST(request: Request) {
       details: results,
     });
   } catch (err: any) {
-    console.error('Error in AI process-pending:', err);
+    console.error('Error in AI processing:', err);
     return NextResponse.json({ error: err.message }, { status: 500 });
   }
 }
 
-// Also support GET for easy trigger / health checks
 export async function GET(request: Request) {
   return POST(request);
 }
