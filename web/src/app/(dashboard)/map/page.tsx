@@ -1,157 +1,82 @@
-"use client";
+import { supabaseAdmin } from "@/lib/db";
+import MapClient from "./MapClient";
 
-import { useEffect, useState, useRef } from "react";
-import Map, { Marker, Popup, NavigationControl } from "react-map-gl/mapbox";
-import "mapbox-gl/dist/mapbox-gl.css";
-import { AlertTriangle } from "lucide-react";
-import { supabase } from "@/lib/db";
+export const dynamic = "force-dynamic";
 
-// Mapbox Token from .env.local
-const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+export default async function MapPage() {
+  const { data: rawIssues } = await supabaseAdmin
+    .from("issues")
+    .select("id, title, category, status, priority_score, report_count, description, location, created_at")
+    .in("status", ["reported", "assigned", "in_progress", "repaired"]);
 
-// Helper to parse POINT(lon lat) from PostGIS to [lon, lat]
-function parsePoint(pointString: string) {
-  if (!pointString || !pointString.startsWith("POINT(")) return null;
-  const coords = pointString.replace("POINT(", "").replace(")", "").split(" ");
-  return {
-    lng: parseFloat(coords[0]),
-    lat: parseFloat(coords[1]),
-  };
-}
-
-export default function IssueMapPage() {
-  const [issues, setIssues] = useState<any[]>([]);
-  const [selectedIssue, setSelectedIssue] = useState<any | null>(null);
-
-  useEffect(() => {
-    async function loadIssues() {
-      const { data, error } = await supabase
-        .from("issues")
-        .select("*")
-        .in("status", ["reported", "assigned", "in_progress"]);
-
-      if (error) {
-        console.error("Error loading map issues:", error);
-      } else if (data) {
-        // Parse the locations
-        const parsed = data
-          .map((issue) => ({
-            ...issue,
-            coordinates: parsePoint(issue.location),
-          }))
-          .filter((issue) => issue.coordinates !== null);
-
-        setIssues(parsed);
+  const issues = (rawIssues || [])
+    .map((issue) => {
+      let lng: number | null = null;
+      let lat: number | null = null;
+      if (issue.location) {
+        if (typeof issue.location === "object" && issue.location.type === "Point") {
+          lng = issue.location.coordinates[0];
+          lat = issue.location.coordinates[1];
+        } else if (typeof issue.location === "string" && issue.location.startsWith("POINT(")) {
+          const c = issue.location.replace("POINT(", "").replace(")", "").split(" ");
+          lng = parseFloat(c[0]);
+          lat = parseFloat(c[1]);
+        }
       }
-    }
+      return {
+        id: issue.id as string,
+        title: issue.title as string,
+        category: (issue.category as string) || "other",
+        status: (issue.status as string) || "reported",
+        priority_score: (issue.priority_score as number) || 0,
+        report_count: (issue.report_count as number) || 1,
+        description: (issue.description as string) || "",
+        created_at: issue.created_at as string,
+        lng,
+        lat,
+      };
+    })
+    .filter((i) => i.lng !== null && i.lat !== null) as {
+    id: string;
+    title: string;
+    category: string;
+    status: string;
+    priority_score: number;
+    report_count: number;
+    description: string;
+    created_at: string;
+    lng: number;
+    lat: number;
+  }[];
 
-    loadIssues();
-  }, []);
+  // Counts for top bar
+  const { count: openCount } = await supabaseAdmin
+    .from("issues")
+    .select("id", { count: "exact", head: true })
+    .in("status", ["reported", "assigned", "in_progress"]);
 
-  if (!MAPBOX_TOKEN) {
-    return (
-      <div className="flex items-center justify-center h-full bg-slate-100 rounded border border-slate-200">
-        <div className="text-center">
-          <AlertTriangle className="mx-auto text-amber-500 mb-2" size={32} />
-          <h2 className="text-lg font-semibold">Mapbox Token Missing</h2>
-          <p className="text-slate-500 text-sm mt-1">
-            Please add NEXT_PUBLIC_MAPBOX_TOKEN to your .env.local
-          </p>
-        </div>
-      </div>
-    );
-  }
+  const { count: atRiskCount } = await supabaseAdmin
+    .from("issues")
+    .select("id", { count: "exact", head: true })
+    .gt("priority_score", 80)
+    .in("status", ["reported", "assigned", "in_progress"]);
+
+  const { count: resolvedCount } = await supabaseAdmin
+    .from("issues")
+    .select("id", { count: "exact", head: true })
+    .eq("status", "resolved");
+
+  const mapboxToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
 
   return (
-    <div className="flex flex-col h-[calc(100vh-10rem)]">
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-          City Map View
-        </h1>
-        <p className="text-slate-500 mt-1">
-          Live spatial overview of active civic issues.
-        </p>
-      </div>
-
-      <div className="flex-1 rounded-sm border border-slate-200 overflow-hidden relative shadow-sm">
-        <Map
-          mapboxAccessToken={MAPBOX_TOKEN}
-          initialViewState={{
-            longitude: -74.006, // Default to NYC, change to your target city
-            latitude: 40.7128,
-            zoom: 11,
-          }}
-          mapStyle="mapbox://styles/mapbox/light-v11"
-        >
-          <NavigationControl position="top-right" />
-
-          {issues.map((issue) => (
-            <Marker
-              key={issue.id}
-              longitude={issue.coordinates.lng}
-              latitude={issue.coordinates.lat}
-              onClick={(e: {
-                originalEvent: { stopPropagation: () => void };
-              }) => {
-                e.originalEvent.stopPropagation();
-                setSelectedIssue(issue);
-              }}
-            >
-              <div
-                className={`w-6 h-6 rounded-full flex items-center justify-center cursor-pointer border-2 shadow-sm ${
-                  issue.priority_score > 80
-                    ? "bg-red-500 border-white text-white z-10"
-                    : "bg-amber-500 border-white text-slate-900"
-                }`}
-              >
-                <span className="text-[10px] font-bold">
-                  {issue.report_count}
-                </span>
-              </div>
-            </Marker>
-          ))}
-
-          {selectedIssue && (
-            <Popup
-              longitude={selectedIssue.coordinates.lng}
-              latitude={selectedIssue.coordinates.lat}
-              anchor="bottom"
-              onClose={() => setSelectedIssue(null)}
-              closeButton={true}
-              closeOnClick={false}
-              className="z-50"
-            >
-              <div className="p-1 min-w-[200px]">
-                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  {selectedIssue.category.replace("_", " ")}
-                </div>
-                <h3 className="font-semibold text-slate-900 text-sm mb-2">
-                  {selectedIssue.title}
-                </h3>
-
-                <div className="grid grid-cols-2 gap-2 text-xs mb-3">
-                  <div className="bg-slate-50 p-1.5 rounded border border-slate-100">
-                    <span className="text-slate-500 block">Priority</span>
-                    <span className="font-semibold text-slate-900">
-                      {selectedIssue.priority_score.toFixed(1)}
-                    </span>
-                  </div>
-                  <div className="bg-slate-50 p-1.5 rounded border border-slate-100">
-                    <span className="text-slate-500 block">Status</span>
-                    <span className="font-semibold text-slate-900 capitalize">
-                      {selectedIssue.status.replace("_", " ")}
-                    </span>
-                  </div>
-                </div>
-
-                <button className="w-full bg-slate-900 text-white py-1.5 rounded text-xs font-medium hover:bg-slate-800 transition">
-                  View Details
-                </button>
-              </div>
-            </Popup>
-          )}
-        </Map>
-      </div>
-    </div>
+    <MapClient
+      issues={issues}
+      mapboxToken={mapboxToken}
+      stats={{
+        open: openCount || 0,
+        atRisk: atRiskCount || 0,
+        resolved: resolvedCount || 0,
+      }}
+    />
   );
 }
