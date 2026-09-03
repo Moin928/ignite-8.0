@@ -18,7 +18,7 @@ import {
   Send,
   MapPin,
   Clock,
-  Sparkles,
+  ExternalLink,
   Layers,
 } from "lucide-react";
 
@@ -404,15 +404,28 @@ export default function OverviewClient({ initialIssues, stats }: Props) {
                   </button>
                 </div>
 
-                {/* Photo Bottom Caption Bar */}
+                {/* Photo Bottom Caption Bar with Google Maps Directions link */}
                 <div className="px-3.5 py-2 bg-slate-50 border-t border-slate-200 flex items-center justify-between text-[11px] text-slate-600 font-medium">
-                  <span className="truncate max-w-[280px]">
-                    {selectedIssue.location_address}
-                  </span>
-                  <span className="flex items-center gap-1 text-slate-500 font-mono text-[10px]">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    Geotag Verified
-                  </span>
+                  <div className="flex items-center gap-1.5 truncate max-w-[280px]">
+                    <MapPin size={12} className="text-amber-600 shrink-0" />
+                    <span className="truncate">{selectedIssue.location_address}</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <a
+                      href={`https://www.google.com/maps/dir/?api=1&destination=${selectedIssue.lat},${selectedIssue.lng}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 bg-white hover:bg-slate-100 text-slate-700 hover:text-amber-700 rounded border border-slate-200 text-[10px] font-semibold transition"
+                      title="Open Navigation in Google Maps"
+                    >
+                      <span>Google Maps</span>
+                      <ExternalLink size={10} className="text-amber-600" />
+                    </a>
+                    <span className="flex items-center gap-1 text-slate-500 font-mono text-[10px]">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      Verified
+                    </span>
+                  </div>
                 </div>
               </div>
 
