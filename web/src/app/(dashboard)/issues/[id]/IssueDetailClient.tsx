@@ -272,7 +272,14 @@ export default function IssueDetailClient({ issue, reports, repair, workers }: P
               Assigned Field Staff
             </span>
             <span className="font-semibold text-slate-800">
-              {assignedWorker ? assignedWorker.name : "Unassigned"}
+              {assignedWorker ? (
+                <>
+                  <span>{assignedWorker.name}</span>
+                  <span className="text-slate-400 font-normal text-[11px] block">{assignedWorker.dept}</span>
+                </>
+              ) : (
+                "Unassigned"
+              )}
             </span>
           </div>
         </div>
@@ -583,7 +590,7 @@ export default function IssueDetailClient({ issue, reports, repair, workers }: P
                 <div className="bg-blue-50/80 border border-blue-200 rounded-sm p-3.5 space-y-1.5 text-xs text-blue-950">
                   <div className="flex items-center gap-1.5 font-bold text-blue-900">
                     <UserCheck size={14} className="text-blue-600" />
-                    <span>Assigned to: {assignedWorker ? assignedWorker.name : "Field Worker"}</span>
+                    <span>Assigned to: {assignedWorker ? `${assignedWorker.name} (${assignedWorker.dept})` : "Field Worker"}</span>
                   </div>
                   <p className="text-[11px] text-blue-700 leading-relaxed">
                     Work order dispatched. The field worker must open the <strong>Worker Portal</strong> on their mobile device to accept the ticket and click <em>"Start Repair Work"</em> upon arriving on-site.

@@ -8,7 +8,6 @@ import {
   Map,
   ClipboardList,
   LogOut,
-  ShieldCheck,
   Users,
   Settings,
 } from "lucide-react";
@@ -32,12 +31,9 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <aside className="w-56 flex flex-col shrink-0 bg-slate-900 text-slate-300">
         {/* Logo */}
         <div className="flex items-center gap-2.5 px-5 py-5 border-b border-slate-800">
-          <div className="w-7 h-7 bg-amber-500 rounded flex items-center justify-center">
-            <ShieldCheck size={16} className="text-slate-900" />
-          </div>
           <div>
-            <div className="text-white font-bold text-sm leading-none">CivicLens</div>
-            <div className="text-slate-500 text-[10px] mt-0.5 leading-none">Authority Portal</div>
+            <div className="text-white font-bold text-sm leading-none tracking-tight">CivicLens</div>
+            <div className="text-slate-500 text-[10px] mt-0.5 leading-none">Admin Portal</div>
           </div>
         </div>
 
@@ -83,8 +79,8 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {/* Top bar */}
         <header className="h-12 bg-amber-500 flex items-center px-6 justify-between shrink-0 shadow-xs">
-          <span className="text-slate-950 font-black text-xs tracking-widest uppercase truncate max-w-[400px]">
-            Official Authority Dashboard · Municipal Works
+          <span className="text-slate-950 font-semibold text-xs tracking-wide truncate max-w-[400px]">
+            Municipal Works Dashboard
           </span>
           <HeaderWardBadge />
         </header>

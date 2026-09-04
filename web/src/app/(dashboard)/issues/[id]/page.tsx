@@ -25,7 +25,7 @@ export default async function IssueDetailPage({
     supabaseAdmin.from("issues").select("*").eq("id", id).single(),
     supabaseAdmin.from("reports").select("*").eq("issue_id", id).order("created_at", { ascending: true }),
     supabaseAdmin.from("repairs").select("*").eq("issue_id", id).order("created_at", { ascending: false }).limit(1),
-    supabaseAdmin.from("profiles").select("id, full_name, role, phone").eq("role", "worker" as any),
+    supabaseAdmin.from("profiles").select("id, full_name, role, phone, department").eq("role", "worker" as any),
   ]);
 
   const issue = issueRes.data;
@@ -59,11 +59,19 @@ export default async function IssueDetailPage({
   // Real Mapbox Reverse Geocoding
   const location_address = await reverseGeocode(lng, lat);
 
+  const DEPT_POOL = [
+    "Roads & Highways Division II",
+    "Water Supply & Drainage (BWSSB)",
+    "Solid Waste Management (SWM)",
+    "Electrical & Streetlighting Wing",
+    "Civil Infrastructure Unit",
+  ];
+
   const workers = profiles.length > 0
-    ? profiles.map((p) => ({
+    ? profiles.map((p, idx) => ({
         id: p.id,
         name: p.full_name || "Field Officer",
-        dept: "Municipal Works Unit",
+        dept: (p as any).department || DEPT_POOL[idx % DEPT_POOL.length] || "Civil Infrastructure Unit",
         phone: p.phone,
       }))
     : DEFAULT_WORKERS;

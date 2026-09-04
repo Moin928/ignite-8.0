@@ -37,6 +37,9 @@ export async function POST(
         title: 'Additional Evidence Requested',
         message: message,
         type: 'evidence_request',
+        is_read: false,
+        action_required: true,
+        action_completed: false,
         created_at: new Date().toISOString(),
       });
       if (notifErr) {

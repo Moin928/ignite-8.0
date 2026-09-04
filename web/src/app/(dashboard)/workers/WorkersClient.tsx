@@ -408,13 +408,13 @@ export default function WorkersClient({ initialWorkers }: Props) {
                   {/* Status */}
                   <td className="px-5 py-3.5">
                     <span
-                      className={`text-[10px] px-2 py-0.5 rounded font-bold border ${
+                      className={`text-[10px] px-2.5 py-0.5 rounded font-bold border inline-block ${
                         w.status === "on-site"
                           ? "bg-amber-50 text-amber-800 border-amber-200"
                           : "bg-emerald-50 text-emerald-800 border-emerald-200"
                       }`}
                     >
-                      {w.status === "on-site" ? "⚡ On-Site" : "🟢 Available"}
+                      {w.status === "on-site" ? "On-Site" : "Available"}
                     </span>
                   </td>
 
@@ -543,7 +543,15 @@ export default function WorkersClient({ initialWorkers }: Props) {
               </div>
               <div>
                 <span className="text-slate-400 block text-[10px] uppercase font-bold">Status</span>
-                <span className="font-bold text-emerald-800">{viewingWorker.status}</span>
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded font-bold border inline-block mt-0.5 ${
+                    viewingWorker.status === "on-site"
+                      ? "bg-amber-50 text-amber-800 border-amber-200"
+                      : "bg-emerald-50 text-emerald-800 border-emerald-200"
+                  }`}
+                >
+                  {viewingWorker.status === "on-site" ? "On-Site" : "Available"}
+                </span>
               </div>
             </div>
 

@@ -5,7 +5,7 @@ export async function GET() {
   try {
     const { data, error } = await supabaseAdmin
       .from('profiles')
-      .select('id, full_name, role, phone, trust_score, created_at')
+      .select('id, full_name, role, phone, department, trust_score, created_at')
       .eq('role', 'worker' as any)
       .order('created_at', { ascending: false });
 
@@ -19,13 +19,14 @@ export async function GET() {
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { full_name, phone } = body;
+    const { full_name, phone, department } = body;
 
     const { data, error } = await supabaseAdmin
       .from('profiles')
       .insert({
         full_name,
         phone,
+        department: department || 'Civil Infrastructure Unit',
         role: 'worker' as any,
         trust_score: 1.0,
       })
