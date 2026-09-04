@@ -1,0 +1,40 @@
+# Environment files
+.env
+.env.*
+!.env.example
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Flutter
+mobile-app/.dart_tool/
+mobile-app/.flutter-plugins
+mobile-app/.flutter-plugins-dependencies
+mobile-app/.packages
+mobile-app/build/
+mobile-app/.pub-cache/
+
+# Android
+mobile-app/android/.gradle/
+mobile-app/android/local.properties
+mobile-app/android/app/build/
+mobile-app/android/captures/
+mobile-app/android/.cxx/
+
+# Windows
+mobile-app/windows/flutter/ephemeral/
+mobile-app/windows/runner/Debug/
+mobile-app/windows/runner/Release/
+mobile-app/windows/runner/x64/
+
+# Generated files
+mobile-app/.metadata
+
+# Test / coverage
+coverage/
