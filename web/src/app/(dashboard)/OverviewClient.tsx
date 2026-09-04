@@ -36,8 +36,6 @@ export type DocketIssue = {
   lng: number;
   created_at: string;
   time_ago: string;
-  sla_display: string;
-  is_urgent: boolean;
   image_url: string;
   lead_department: string;
   case_officer: string;
@@ -332,7 +330,7 @@ export default function OverviewClient({ initialIssues, stats }: Props) {
                   </span>
                 </div>
                 <div className="text-xs text-slate-500 font-medium">
-                  SLA: {selectedIssue.sla_display}
+                  Reported {selectedIssue.time_ago}
                 </div>
               </div>
 

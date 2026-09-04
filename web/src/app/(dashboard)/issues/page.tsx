@@ -37,17 +37,6 @@ function getSeverityBand(score: number) {
   return SEV_CONFIG[0];
 }
 
-function getSLA(createdAt: string) {
-  const created = new Date(createdAt);
-  const now = new Date();
-  const diffH = Math.floor((now.getTime() - created.getTime()) / 3600000);
-  const slaH = 72;
-  const remaining = slaH - diffH;
-  if (remaining <= 0) return { label: "SLA Breached", cls: "text-red-600 font-bold" };
-  if (remaining <= 24) return { label: `${remaining}h left`, cls: "text-orange-600 font-bold" };
-  return { label: `${Math.floor(remaining / 24)}d ${remaining % 24}h left`, cls: "text-slate-500" };
-}
-
 import { runAutoDeduplication } from "@/utils/autoDedup";
 
 export default async function IssuesPage({
@@ -160,7 +149,6 @@ export default async function IssuesPage({
           {displayIssues.map((issue) => {
             const sc = STATUS_CONFIG[issue.status as string] || STATUS_CONFIG["reported"];
             const sev = getSeverityBand(issue.priority_score as number || 0);
-            const sla = getSLA(issue.created_at as string);
 
             return (
               <Link
@@ -213,24 +201,20 @@ export default async function IssuesPage({
                   </div>
 
                   {/* Footer */}
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                    <div className="flex items-center gap-1 text-xs">
-                      <Clock size={11} className={sla.cls} />
-                      <span className={`text-[11px] ${sla.cls}`}>
-                        SLA: {sla.label}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-slate-400">
+                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-xs">
+                    <div className="flex items-center gap-1 text-slate-500 font-medium text-[11px]">
+                      <Clock size={11} className="text-slate-400" />
                       <span>
                         {new Date(issue.created_at as string).toLocaleDateString("en-IN", {
                           day: "numeric",
                           month: "short",
+                          year: "numeric",
                         })}
                       </span>
-                      <span className="flex items-center gap-1 font-semibold text-slate-600">
-                        <Users size={11} />
-                        {issue.report_count as number || 1}
-                      </span>
+                    </div>
+                    <div className="flex items-center gap-1 font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-[10px]">
+                      <Users size={11} className="text-amber-600" />
+                      <span>{issue.report_count as number || 1} report{(issue.report_count as number || 1) !== 1 ? "s" : ""}</span>
                     </div>
                   </div>
                 </div>

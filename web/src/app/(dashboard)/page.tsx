@@ -18,29 +18,6 @@ function formatTimeAgo(dateStr: string): string {
   }
 }
 
-function calculateSLADisplay(dateStr: string, score: number): { display: string; isUrgent: boolean } {
-  try {
-    const elapsedH = (Date.now() - new Date(dateStr).getTime()) / 3600000;
-    const maxH = score >= 80 ? 4 : score >= 60 ? 24 : 72;
-    const remainingH = Math.max(0, maxH - elapsedH);
-    const hours = Math.floor(remainingH);
-    const minutes = Math.floor((remainingH - hours) * 60);
-
-    const padH = String(hours).padStart(2, "0");
-    const padM = String(minutes).padStart(2, "0");
-
-    if (hours === 0 && minutes === 0) {
-      return { display: "Expired", isUrgent: true };
-    }
-    return {
-      display: `${padH}h ${padM}m`,
-      isUrgent: hours < 4,
-    };
-  } catch {
-    return { display: "03h 45m", isUrgent: true };
-  }
-}
-
 const DEPT_MAP: Record<string, string> = {
   pothole: "Roads & Highways Division II",
   road_damage: "Roads & Infrastructure Wing",
@@ -111,7 +88,6 @@ export default async function OverviewPage() {
       // Perform Mapbox Reverse Geocoding with the decoded PostGIS EWKB coordinates
       const location_address = await reverseGeocode(lng, lat);
 
-      const sla = calculateSLADisplay(issue.created_at, issue.priority_score || 70);
       const photo =
         imageMap[issue.id] ||
         "https://images.unsplash.com/photo-1515162816999-a0c47dc192f7?auto=format&fit=crop&w=1200&q=80";
@@ -136,8 +112,6 @@ export default async function OverviewPage() {
         lng,
         created_at: issue.created_at || new Date().toISOString(),
         time_ago: formatTimeAgo(issue.created_at || new Date().toISOString()),
-        sla_display: sla.display,
-        is_urgent: sla.isUrgent,
         image_url: photo,
         lead_department: DEPT_MAP[issue.category as string] || "Roads & Highways Division II",
         case_officer: "Er. Rajiv Sharma (PWD)",

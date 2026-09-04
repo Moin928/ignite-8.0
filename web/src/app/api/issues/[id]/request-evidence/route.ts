@@ -29,20 +29,19 @@ export async function POST(
       })
       .eq('id', id);
 
-    // Try inserting into notifications table if available, or logging evidence request
-    try {
-      if (citizenId) {
-        await supabaseAdmin.from('notifications' as any).insert({
-          user_id: citizenId,
-          issue_id: id,
-          title: 'Additional Evidence Requested',
-          message: message,
-          type: 'evidence_request',
-          created_at: new Date().toISOString(),
-        });
+    // Insert into notifications table in Supabase
+    if (citizenId) {
+      const { error: notifErr } = await supabaseAdmin.from('notifications' as any).insert({
+        citizen_id: citizenId,
+        issue_id: id,
+        title: 'Additional Evidence Requested',
+        message: message,
+        type: 'evidence_request',
+        created_at: new Date().toISOString(),
+      });
+      if (notifErr) {
+        console.warn('Notification insert warning:', notifErr.message);
       }
-    } catch (notifErr) {
-      console.warn('Notification table note:', notifErr);
     }
 
     return NextResponse.json({
