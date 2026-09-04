@@ -25,7 +25,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
 
   Color _getTypeColor(String type) {
     switch (type.toLowerCase()) {
-      case 'evidence_requested':
+      case 'evidence_request':        // web portal sends 'evidence_request'
         return const Color(0xFFEF4444);
       case 'resolved':
         return const Color(0xFF10B981);
@@ -44,7 +44,7 @@ class _InboxScreenState extends ConsumerState<InboxScreen> {
 
   IconData _getTypeIcon(String type) {
     switch (type.toLowerCase()) {
-      case 'evidence_requested':
+      case 'evidence_request':
         return Icons.add_photo_alternate_rounded;
       case 'resolved':
         return Icons.verified_rounded;

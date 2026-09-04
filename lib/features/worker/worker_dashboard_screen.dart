@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:civic_app/features/auth/auth_provider.dart';
 import 'package:civic_app/features/worker/worker_provider.dart';
 import 'package:civic_app/features/worker/worker_profile_screen.dart';
@@ -20,17 +22,92 @@ class WorkerDashboardScreen extends ConsumerStatefulWidget {
 class _WorkerDashboardScreenState extends ConsumerState<WorkerDashboardScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
   Position? _workerPosition;
-  int _navIndex = 0; // 0 = Work Orders, 1 = Department & Profile
+  int _navIndex = 0;
+  StreamSubscription<List<Map<String, dynamic>>>? _nudgeStreamSub;
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
     _getWorkerLocation();
+    _listenForNudges();
+  }
+
+  void _listenForNudges() {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    _nudgeStreamSub = Supabase.instance.client
+        .from('notifications')
+        .stream(primaryKey: ['id'])
+        .eq('citizen_id', user.id) // web portal stores worker ID in citizen_id column
+        .order('created_at', ascending: false)
+        .listen((alerts) {
+          if (!mounted) return;
+          final latestNudge = alerts.firstWhere(
+            (a) => a['type'] == 'worker_nudge' && a['is_read'] == false,
+            orElse: () => <String, dynamic>{},
+          );
+          if (latestNudge.isNotEmpty) {
+            // Mark as read immediately so it doesn't repeat
+            Supabase.instance.client
+                .from('notifications')
+                .update({'is_read': true})
+                .eq('id', latestNudge['id']);
+            _showNudgeAlert(
+              title: latestNudge['title']?.toString() ?? '⚠️ Priority Alert',
+              message: latestNudge['message']?.toString() ?? 'You have a high-priority update from the municipal authority.',
+            );
+          }
+        });
+  }
+
+  void _showNudgeAlert({required String title, required String message}) {
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        icon: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.priority_high_rounded, color: Color(0xFFEF4444), size: 36),
+        ),
+        title: Text(
+          title,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 17, color: Color(0xFF0F172A)),
+        ),
+        content: Text(
+          message,
+          textAlign: TextAlign.center,
+          style: const TextStyle(fontSize: 13, color: Color(0xFF475569), height: 1.5),
+        ),
+        actions: [
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => Navigator.pop(ctx),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFEF4444),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              child: const Text('Acknowledge & Proceed', style: TextStyle(fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   void dispose() {
+    _nudgeStreamSub?.cancel();
     _tabController.dispose();
     super.dispose();
   }
